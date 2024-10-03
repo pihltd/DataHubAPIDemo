@@ -14,17 +14,24 @@ mutation CreateBatch(
 """
 
 list_sub_query = """
-    query ListSubmissions($status:String!){
-          listSubmissions(status: $status){
-            submissions{
-              _id
-              name
-              status
-              studyAbbreviation
-              studyID
-            }
-          }
+query ListSubmissions($status: String!){
+  listSubmissions(status: $status){
+    submissions{
+      _id
+      name
+      submitterID
+      submitterName
+      studyAbbreviation
+      studyID
+      dbGaPID
+      createdAt
+      updatedAt
+      metadataValidationStatus
+      fileValidationStatus
+      status
     }
+  }
+}
 """
 
 create_submission_query = """
@@ -63,6 +70,32 @@ org_query = """
     studyAbbreviation
     studyName
     _id
+  }
+}
+"""
+
+qc_check_query = """
+query GetQCResults(
+  $id: ID!
+  $severities: String
+  $first: Int
+  $offset: Int
+){
+  submissionQCResults(_id:$id, severities:$severities, first:$first, offset:$offset){
+    total
+    results{
+      submissionID
+      severity
+      type
+      errors{
+        title
+        description
+      }
+      warnings{
+        title
+        description
+      }
+    }
   }
 }
 """
