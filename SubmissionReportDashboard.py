@@ -7,10 +7,18 @@ import DH_Queries as dhq
 import os
 from datetime import datetime, timezone
 
-dev2 = 'https://hub-dev2.datacommons.cancer.gov/api/graphql'
 
-def apiQuery(url, query, variables):
-    token = os.environ['DEV2API']
+
+def apiQuery(tier, query, variables):
+    
+    
+    if tier == 'DEV2':
+        url = 'https://hub-dev2.datacommons.cancer.gov/api/graphql'
+        token = os.environ['DEV2API']
+    elif tier == 'STAGE':
+        url = 'https://hub-stage.datacommons.cancer.gov/api/graphql'
+        token = os.environ['STAGEAPI']
+
     headers = {"Authorization": f"Bearer {token}"}
     
     try:
@@ -43,7 +51,7 @@ def errorPieChart(subid):
     first = -1
     offset = 0
     variables = {"id":subid, "severities":severities, "first":first, "offset":offset}
-    error_res = apiQuery(dev2, dhq.qc_check_query, variables)
+    error_res = apiQuery('STAGE', dhq.qc_check_query, variables)
     error_df = pd.DataFrame(error_res['data']['submissionQCResults']['results'])
     return error_df
 
@@ -77,10 +85,10 @@ def processErrors(error_df):
 
 
 #Get a list of the studies
-studyjson = apiQuery(dev2, dhq.org_query, None)
+studyjson = apiQuery('STAGE', dhq.org_query, None)
 study_df = pd.DataFrame(studyjson['data']['listApprovedStudiesOfMyOrganization'])
 #Get a list of the submissions
-subjson = apiQuery(dev2, dhq.list_sub_query,{"status":"All"})
+subjson = apiQuery('STAGE', dhq.list_sub_query,{"status":"All"})
 sub_df = pd.DataFrame(subjson['data']['listSubmissions']['submissions'])
 #Create the elapsedTime column
 sub_df = elapsedTime(sub_df)
