@@ -1,36 +1,18 @@
-import requests
-import os
+#import requests
+#import os
+import CRDCStuff as crdc
+import DHQueries as dq
 
-def apiQuery(query):
-    #headers = {"Authorization" : f"Bearer {token}", "accept" : "application/json"}
-    token = os.environ['DEV2API']
-    headers = {"Authorization": f"Bearer {token}"}
-    url = 'https://hub-dev2.datacommons.cancer.gov/api/graphql'
-    print(headers)
-    try:
-        #result = requests.post(url, headers = headers, data = query)
-        result = requests.post(url = url, headers = headers, json={"query": query})
-        if result.status_code == 200:
-            return result.json()
-        else:
-            #return(f"Error: {result.status_code}")
-            print(f"Error: {result.status_code}")
-            print(type(result))
-            print(result.request)
-            print(result.encoding)
-            print(result.text)
-            return result.content
-    except requests.exceptions.HTTPError as e:
-        return(f"HTTP Error: {e}")
-    
-query = """
-{
-  listSubmissions{
-      submissions{
-          studyID
-        }
-    }
-}
-"""
-res = apiQuery(query)
-print(res)
+#url, apitoken = crdc.dhAPICreds('stage')
+#res = crdc.dhApiQuery(url, apitoken, dq.org_query)
+#print(res)
+#teststring = "This is # Test\t\n\r!@#$%^&*()"
+#print(crdc.cleanString(teststring, True))
+
+#testyamlfile = r'C:\Users\pihltd\Documents\github\CRDCLib\test\yamltestfile.yml'
+#print(testyamlfile)
+#print(crdc.readYAML(testyamlfile))
+
+crdc_creds = crdc.dhAPICreds('stage')
+res = crdc.dhApiQuery(crdc_creds['url'],crdc_creds['token'], dq.org_query)
+print(list(res.keys()))
