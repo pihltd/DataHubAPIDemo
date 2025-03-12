@@ -14,7 +14,7 @@ mutation CreateBatch(
 """
 
 list_sub_query = """
-query ListSubmissions($status: String!){
+query ListSubmissions($status: [String]){
   listSubmissions(status: $status){
     submissions{
       _id
@@ -63,15 +63,18 @@ mutation CreateNewSubmission(
 }"""
 
 org_query = """
-{
-  listApprovedStudiesOfMyOrganization{
-    originalOrg
-    dbGaPID
-    studyAbbreviation
-    studyName
-    _id
+  query GetMyUser{
+    getMyUser{
+      userStatus
+      _id
+      studies{
+        _id
+        studyAbbreviation
+        studyName
+        dbGaPID
+      }
+    }
   }
-}
 """
 
 qc_check_query = """

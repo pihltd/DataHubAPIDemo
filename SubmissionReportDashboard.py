@@ -86,10 +86,14 @@ def processErrors(error_df):
 
 #Get a list of the studies
 studyjson = apiQuery('STAGE', dhq.org_query, None)
-study_df = pd.DataFrame(studyjson['data']['listApprovedStudiesOfMyOrganization'])
+columns = ["_id","studyAbbreviation"]
+study_df = pd.DataFrame(columns=columns)
+for entry in studyjson['data']['getMyUser']['studies']:
+    study_df.loc[len(study_df)] = entry
 #Get a list of the submissions
-subjson = apiQuery('STAGE', dhq.list_sub_query,{"status":"All"})
+subjson = apiQuery('STAGE', dhq.list_sub_query,{"status":["All"]})
 sub_df = pd.DataFrame(subjson['data']['listSubmissions']['submissions'])
+print(sub_df)
 #Create the elapsedTime column
 sub_df = elapsedTime(sub_df)
 
