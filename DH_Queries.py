@@ -102,3 +102,47 @@ query GetQCResults(
   }
 }
 """
+
+submission_stats_query = """
+    query SubmissionStats($id: ID!) {
+    submissionStats(_id: $id) {
+        stats {
+            nodeName
+            total
+            new
+            passed
+            warning
+            error
+        }
+    }
+}
+"""
+
+summaryQuery = """
+    query SummaryQueryQCResults(
+        $submissionID: ID!,
+        $severity: String,
+        $first: Int,
+        $offset: Int,
+        $orderBy: String,
+        $sortDirection: String
+    ){
+        aggregatedSubmissionQCResults(
+            submissionID: $submissionID,
+            severity: $severity,
+            first: $first,
+            offset: $offset,
+            orderBy: $orderBy
+            sortDirection: $sortDirection
+        ){
+            total
+            results{
+                title
+                severity
+                count
+                code
+            }
+        }
+    }
+
+"""

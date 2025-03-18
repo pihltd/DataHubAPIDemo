@@ -93,7 +93,7 @@ for entry in studyjson['data']['getMyUser']['studies']:
 #Get a list of the submissions
 subjson = apiQuery('STAGE', dhq.list_sub_query,{"status":["All"]})
 sub_df = pd.DataFrame(subjson['data']['listSubmissions']['submissions'])
-print(sub_df)
+#print(sub_df)
 #Create the elapsedTime column
 sub_df = elapsedTime(sub_df)
 
