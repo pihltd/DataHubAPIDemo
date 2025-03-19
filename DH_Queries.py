@@ -146,3 +146,46 @@ summaryQuery = """
     }
 
 """
+
+detailedQCQuery = """
+    query DetailedQueryQCResults(
+        $id: ID!,
+        $severities: String,
+        $first: Int,
+        $offset: Int,
+        $orderBy: String,
+        $sortDirection: String
+        $issueCode: String
+    ){
+        submissionQCResults(
+            _id:$id,
+            severities: $severities,
+            first: $first,
+            offset: $offset,
+            orderBy: $orderBy,
+            sortDirection: $sortDirection,
+            issueCode: $issueCode
+        ){
+        total
+        results{
+            submissionID
+            type
+            validationType
+            batchID
+            displayID
+            submittedID
+            severity
+            uploadedDate
+            validatedDate
+            errors{
+                title
+                description
+            }
+            warnings{
+                title
+                description
+            }
+        }
+        }
+    }
+"""
