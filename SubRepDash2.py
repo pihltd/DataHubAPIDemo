@@ -8,6 +8,7 @@ import DH_Queries as dhq
 import os
 from datetime import datetime, timezone
 import time
+import json
 
 # USEFUL Links
 #  https://medium.com/@jandegener/writing-a-simple-plotly-dash-app-f5d83b738fd7
@@ -121,6 +122,20 @@ CONTENT_STYLE = {
     "padding": "2rem 1 rem"
 }
 
+SELECTED_TAB_STYLE = {
+    'borderTop': '2px solid #000204',
+    'borderBottom': '2px solid #000204',
+    'backgroundColor': '#0d7cf5',
+    'color': 'white',
+    'padding': '6px'
+}
+
+TAB_STYLE = {
+    'borderBottom': '2px solid #000204',
+    'padding': '6px',
+    'fontWeight': 'bold'
+}
+
 ############################################
 #                                          #
 #             Components                   #
@@ -129,7 +144,7 @@ CONTENT_STYLE = {
 
 sidebar = html.Div( #Whole Sidebar Div
     [
-        html.H2("Studies", className="display-4"),
+        html.H2("Data Hub", className="display-4"),
         html.Hr(),
         html.H3("Select a Study", className="display-8"),
         html.Hr(),
@@ -165,6 +180,17 @@ sidebar = html.Div( #Whole Sidebar Div
                     multi=False,
                     style={'backgroundcolor': '1E1E1E'},
                 ),
+                html.Hr(),
+                html.H2('Data Nodes'),
+                html.Hr(),
+                html.P("Select a data node"),
+                html.Hr(),
+                dcc.Dropdown(
+                    id = 'dataselector',
+                    options=[],
+                    multi=False,
+                    style={'backgroundcolor':'1E1E1E'}
+                ),
             ],
             style={'color':'1E1E1E'}
         ),
@@ -174,9 +200,8 @@ sidebar = html.Div( #Whole Sidebar Div
 
 tableheader = html.Div([
     html.Hr(),
-    html.P(
-        "Detailed Study Information", className="display-8"
-    )
+    html.H2("Study Information"),
+    html.Hr()
 ],
     style=CONTENT_STYLE)
 
@@ -229,15 +254,60 @@ errorpie = html.Div(
     style=CONTENT_STYLE
 )
 
+dataheader = html.Div(
+    [
+        html.Hr(),
+        html.H2("Submitted Data"),
+        html.Hr()
+    ],
+    style=CONTENT_STYLE
+)
+
 content = html.Div(id="page-content", style=CONTENT_STYLE)
 errorcontent = html.Div(
     [
-        html.Div(dbc.Spinner(html.Div(id="errorcontentspinner"), color="secondary")),
+        html.Div(dbc.Spinner(html.Div(id="errorcontentspinner"), color="primary")),
         html.Div(id="errorcontent", style=CONTENT_STYLE)
     ]
 )
+datacontent = html.Div(
+    [
+        html.Div(dbc.Spinner(html.Div(id="datacontentspinner"), color="primary")),
+        html.Div(id="datacontent", style=CONTENT_STYLE)
+    ]
+)
 #errorcontent = html.Div(id="errorcontent", style=CONTENT_STYLE)
-app.layout = html.Div([sidebar, tableheader, content, subgraph, errorpie, errorheader, errorcontent])
+#app.layout = html.Div([sidebar, tableheader, content, subgraph, errorpie, errorheader, errorcontent])
+
+app.layout = html.Div([sidebar,
+                       dcc.Tabs(id='tabs-container', value='tab-status',
+                                children=
+                           [
+                               dcc.Tab(label="Status",
+                                       value = 'tab-status',
+                                       style = TAB_STYLE,
+                                       selected_style = SELECTED_TAB_STYLE,
+                                       children=[
+                                           tableheader, content, subgraph, errorpie
+                                       ],
+                               ),
+                               dcc.Tab(label="Errors",
+                                       value = 'tab-errors',
+                                       style = TAB_STYLE,
+                                       selected_style = SELECTED_TAB_STYLE,
+                                       children=[
+                                           errorheader, errorcontent
+                                       ]
+                               ),
+                               dcc.Tab(label="Submitted Data",
+                                       value = 'tab-data',
+                                       style = TAB_STYLE,
+                                       selected_style = SELECTED_TAB_STYLE,
+                                       children=[
+                                           dataheader, datacontent
+                                       ]),
+                           ],
+                       )])
 
 
 ####################################
@@ -246,6 +316,13 @@ app.layout = html.Div([sidebar, tableheader, content, subgraph, errorpie, errorh
 #                                  #
 ####################################
 
+@app.callback(
+    Output('datacontentspinner', 'children'),
+    Input(component_id='dataselector', component_property='value')
+)
+def loadDataSpinner(value):
+    time.sleep(5)
+    return value
 
 @app.callback(
     Output('errorspinner', 'children'),
@@ -280,7 +357,59 @@ def populateErrorSelector(subselector):
     else:
         return []
 
-
+@app.callback(
+    Output('dataselector', 'options'),
+    Input(component_id='subselector', component_property='value')
+)
+def populateNodeSelector(subselector):
+    idlist = sub_df.query("name == @subselector")["_id"].tolist()
+    if len(idlist) >= 1:
+        #queryvars = {"submissionID":idlist[0], "severity":"All", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
+        queryvars = {'id':idlist[0]}
+        selector_res = apiQuery('STAGE', dhq.submission_stats_query, queryvars)
+        temp = []
+        for entry in selector_res['data']['submissionStats']['stats']:
+            temp.append(entry['nodeName'])
+        return temp
+    else:
+        return []
+    
+    
+@app.callback(
+    Output("datacontent", "children"),
+    Input(component_id="dataselector", component_property="value"),
+    State(component_id='subselector', component_property="value")
+)
+def populateDataTable(dataselector, subselector):
+    idlist = sub_df.query("name == @subselector")['_id'].tolist()
+    if len(idlist) >= 1:
+        queryvars = {'_id':idlist[0], 'nodeType':dataselector, 'status':'All', 'first':-1, 'offset':0, 'orderBy':'studyID', 'sortDirection':'desc'}
+        data_res = apiQuery('STAGE', dhq.submission_nodes_query, queryvars)
+        if data_res['data']['getSubmissionNodes']['total'] == None:
+            return {}
+        else:
+            #print(data_res['data']['getSubmissionNodes']['properties'])
+            data_df = pd.DataFrame(columns=data_res['data']['getSubmissionNodes']['properties'])
+            for entry in data_res['data']['getSubmissionNodes']['nodes']:
+                data_df.loc[len(data_df)] = json.loads(entry['props'])
+            return dash_table.DataTable(
+                data=data_df.to_dict('records'),
+                columns=[{"name": e, "id": e} for e in (data_df.columns)],
+                style_table={'overflowX':'auto'},
+                style_cell={'overflow':'hidden', 'textOverflow':'ellipsis', 'maxWidth':10, 'textAlign':'center'},
+                style_data={'color':'black', 'backgroundColor':'white'},
+                style_data_conditional=[{'if':{'row_index':'odd'}, 'backgroundColor': 'rgb(220,220,220)'}],
+                style_header={'backgroundColor': 'rgb(210,210,210)', 'color':'black', 'fontWeight':'bold', 'textAlign':'center'},
+                tooltip_data=[
+                    {
+                        column:{'value': str(value), 'type':'markdown'}
+                        for column, value in row.items()
+                    } for row in data_df.to_dict('records')
+                ],
+                tooltip_duration=None
+            )
+    else:
+        return {}
 
 @app.callback(
     Output('errorcontent', 'children'),

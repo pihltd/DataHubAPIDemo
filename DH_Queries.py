@@ -189,3 +189,35 @@ detailedQCQuery = """
         }
     }
 """
+
+submission_nodes_query = """
+query getSubmissionNodes(
+    $_id: String!,
+    $nodeType: String!, 
+    $status: String,
+    $first: Int, 
+    $offset:Int, 
+    $orderBy: String, 
+    $sortDirection:String
+) {
+getSubmissionNodes(
+    submissionID: $_id
+    nodeType: $nodeType
+    status: $status
+    first: $first
+    offset: $offset
+    orderBy: $orderBy
+    sortDirection: $sortDirection
+) {
+    total
+    IDPropName
+    properties
+    nodes {
+        nodeID
+        nodeType
+        status
+        props
+    }
+    }
+}
+"""
