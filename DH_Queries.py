@@ -14,7 +14,7 @@ mutation CreateBatch(
 """
 
 list_sub_query = """
-query ListSubmissions($status: String!){
+query ListSubmissions($status: [String]){
   listSubmissions(status: $status){
     submissions{
       _id
@@ -63,15 +63,18 @@ mutation CreateNewSubmission(
 }"""
 
 org_query = """
-{
-  listApprovedStudiesOfMyOrganization{
-    originalOrg
-    dbGaPID
-    studyAbbreviation
-    studyName
-    _id
+  query GetMyUser{
+    getMyUser{
+      userStatus
+      _id
+      studies{
+        _id
+        studyAbbreviation
+        studyName
+        dbGaPID
+      }
+    }
   }
-}
 """
 
 qc_check_query = """
@@ -97,5 +100,124 @@ query GetQCResults(
       }
     }
   }
+}
+"""
+
+submission_stats_query = """
+query SubmissionStats($id: ID!) {
+    submissionStats(_id: $id) {
+        stats {
+            nodeName
+            total
+            new
+            passed
+            warning
+            error
+        }
+    }
+}
+"""
+
+summaryQuery = """
+    query SummaryQueryQCResults(
+        $submissionID: ID!,
+        $severity: String,
+        $first: Int,
+        $offset: Int,
+        $orderBy: String,
+        $sortDirection: String
+    ){
+        aggregatedSubmissionQCResults(
+            submissionID: $submissionID,
+            severity: $severity,
+            first: $first,
+            offset: $offset,
+            orderBy: $orderBy
+            sortDirection: $sortDirection
+        ){
+            total
+            results{
+                title
+                severity
+                count
+                code
+            }
+        }
+    }
+
+"""
+
+detailedQCQuery = """
+    query DetailedQueryQCResults(
+        $id: ID!,
+        $severities: String,
+        $first: Int,
+        $offset: Int,
+        $orderBy: String,
+        $sortDirection: String
+        $issueCode: String
+    ){
+        submissionQCResults(
+            _id:$id,
+            severities: $severities,
+            first: $first,
+            offset: $offset,
+            orderBy: $orderBy,
+            sortDirection: $sortDirection,
+            issueCode: $issueCode
+        ){
+        total
+        results{
+            submissionID
+            type
+            validationType
+            batchID
+            displayID
+            submittedID
+            severity
+            uploadedDate
+            validatedDate
+            errors{
+                title
+                description
+            }
+            warnings{
+                title
+                description
+            }
+        }
+        }
+    }
+"""
+
+submission_nodes_query = """
+query getSubmissionNodes(
+    $_id: String!,
+    $nodeType: String!, 
+    $status: String,
+    $first: Int, 
+    $offset:Int, 
+    $orderBy: String, 
+    $sortDirection:String
+) {
+getSubmissionNodes(
+    submissionID: $_id
+    nodeType: $nodeType
+    status: $status
+    first: $first
+    offset: $offset
+    orderBy: $orderBy
+    sortDirection: $sortDirection
+) {
+    total
+    IDPropName
+    properties
+    nodes {
+        nodeID
+        nodeType
+        status
+        props
+    }
+    }
 }
 """
