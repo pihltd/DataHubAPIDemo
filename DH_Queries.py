@@ -104,7 +104,7 @@ query GetQCResults(
 """
 
 submission_stats_query = """
-    query SubmissionStats($id: ID!) {
+query SubmissionStats($id: ID!) {
     submissionStats(_id: $id) {
         stats {
             nodeName

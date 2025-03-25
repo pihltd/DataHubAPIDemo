@@ -11,10 +11,12 @@ import time
 import json
 import io
 
-# USEFUL Links
-#  https://medium.com/@jandegener/writing-a-simple-plotly-dash-app-f5d83b738fd7
-#  https://realpython.com/python-dash/
-# https://dash-bootstrap-components.opensource.faculty.ai/examples/simple-sidebar/page-2
+
+#######################################
+#                                     #
+#       App Definition                #
+#                                     #
+#######################################
 
 external_stylesheets = [
     {  "href": "https://fonts.googleapis.com/css2?"
@@ -224,24 +226,42 @@ errorheader = html.Div(
 )
 
 
-
-subgraph = html.Div(
-          className='submissionStatusPlot',
-          children=[
-              html.Hr(),
-              html.H2("Submission Status", id='submissionstatusplottitle'),
-              dcc.Graph(id='submissionstatusplot')
-          ],
-          style=CONTENT_STYLE  
-        )
+barcharts = html.Div(
+    [
+        html.Div(
+            dbc.Spinner(html.Div(id='errorspinner'), color="primary")
+        ),
+        html.Div(
+            #Count bar chart
+            className='submissionStatusPlot',
+            children=[
+                html.Hr(),
+                html.H2("Submission Status by Count", id='submissionstatusplottitle'),
+                dcc.Graph(id='submissionstatusplot')
+            ],
+            style={'width':'49%', 'display':'inline-block'},
+        ),
+        html.Div(
+            # Percentage bar chart
+            className='submissionStatusPlotPercentage',
+            children=[
+                html.Hr(),
+                html.H2("Submission Status by Percentage", id="submissionPercentstatusplottitle"),
+                dcc.Graph(id="submissionPercentstatusplot")
+            ],
+            style={'width':'49%', 'display':'inline-block'},
+        ),
+    ],
+    style=CONTENT_STYLE
+)
 
 
 
 errorpie = html.Div(
     [
-    html.Div(
-      dbc.Spinner(html.Div(id='errorspinner'), color="primary")  
-    ),
+    #html.Div(
+    #  dbc.Spinner(html.Div(id='errorspinner'), color="primary")  
+    #),
     html.Div(
         #Error Pie Chart
         className='ValidationErrorPieChart',
@@ -315,7 +335,7 @@ app.layout = html.Div([sidebar,
                                        style = TAB_STYLE,
                                        selected_style = SELECTED_TAB_STYLE,
                                        children=[
-                                           tableheader, content, subgraph, errorpie
+                                           tableheader, content, barcharts, errorpie
                                        ],
                                ),
                                dcc.Tab(label="Errors",
@@ -426,7 +446,15 @@ def changeStudyTableTitle(studyselector):
     Input(component_id='subselector', component_property='value')
 )
 def changeSubmissionStatusPlotTitle(subselector):
-    return f"Submission Status: {subselector}"
+    return f"Submission Status by Count: {subselector}"
+
+
+@app.callback(
+    Output("submissionPercentstatusplottitle", "children"),
+    Input(component_id='subselector', component_property='value')
+)
+def changeSubmissionStatusPercentageTitle(subselector):
+    return f"Submission Status by Percentage: {subselector}"
 
 
 @app.callback(
@@ -557,7 +585,10 @@ def populateStudyInfoTable(studyselector, submissionstore):
                                 style_table={'overflowX':'auto'},
                                 style_cell={'overflow':'hidden', 'textOverflow':'ellipsis', 'maxWidth':10, 'textAlign':'center'},
                                 style_data={'color':'black', 'backgroundColor':'white'},
-                                style_data_conditional=[{'if':{'row_index':'odd'}, 'backgroundColor': 'rgb(220,220,220)'}],
+                                style_data_conditional=[{'if':{'row_index':'odd'}, 'backgroundColor': 'rgb(220,220,220)'},
+                                                        {'if':{'filter_query':'{inactiveDays} <= 45', 'column_id':'inactiveDays'}, 'backgroundColor':'green', 'color':'white'},
+                                                        {'if':{'filter_query':'{inactiveDays} >= 46 && {inactiveDays} <=59', 'column_id':'inactiveDays'}, 'backgroundColor':'yellow', 'color':'black'},
+                                                        {'if':{'filter_query':'{inactiveDays} >= 60', 'column_id':'inactiveDays'}, 'backgroundColor':'red', 'color':'white'}],
                                 style_header={'backgroundColor': 'rgb(210,210,210)', 'color':'black', 'fontWeight':'bold', 'textAlign':'center'},
                                 tooltip_data=[
                                     {
@@ -732,6 +763,36 @@ def subStatusChart(subselector, submissionstore, tierselector):
     else:
         return {}
 
+
+
+@app.callback(
+    Output("submissionPercentstatusplot", "figure"),
+    Input(component_id="subselector", component_property="value"),
+    State(component_id="submissionstore", component_property="data"),
+    State(component_id="tierselector", component_property="value")
+)
+def subStatusPercentageChart(subselector, submissionstore, tierselector):
+    sub_df = pd.read_json(io.StringIO(submissionstore),orient='split')
+    idlist = sub_df.query("name == @subselector")["_id"].tolist()
+    if len(idlist) >=1:
+        qvars = {'id':idlist[0]}
+        query_res = apiQuery(tierselector, dhq.submission_stats_query, qvars)
+        columns = ['nodeName', 'total', 'new', 'error', 'warning', 'passed']
+        substats_df = pd.DataFrame(columns=columns)
+        for entry in query_res['data']['submissionStats']['stats']:
+            substats_df.loc[len(substats_df)] = entry
+        #Add percentages to df
+        calccolumns = columns = ['new', 'error', 'warning', 'passed']
+        for col in calccolumns:
+            newcol = col+"_percentage"
+            percentages = []
+            for index, row in substats_df.iterrows():
+                percentages.append((row[col]/row['total'])*100)
+            substats_df.insert(index, newcol, percentages)
+        
+        return px.bar(substats_df, x='nodeName', y=['new_percentage', 'error_percentage', 'warning_percentage', 'passed_percentage'])
+    else:
+        return {}
 
 
 
