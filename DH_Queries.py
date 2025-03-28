@@ -221,3 +221,36 @@ getSubmissionNodes(
     }
 }
 """
+
+
+list_batch_query ="""
+query ListBatches(
+  $submissionID: ID!,
+  $orderBy: String,
+ $sortDirection: String) {
+  listBatches(submissionID: $submissionID,
+             orderBy: $orderBy,
+             sortDirection: $sortDirection) {
+    total
+    batches {
+      _id
+      submissionID
+      createdAt
+      updatedAt
+      displayID
+      type
+      fileCount
+      status
+      errors
+      files {
+        fileName
+        nodeType
+        size
+        status
+        errors
+        createdAt
+      }
+    }
+  }
+}
+"""

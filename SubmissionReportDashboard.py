@@ -1,6 +1,7 @@
 from dash import html, dcc, dash_table, Output, Input, State
 import dash
 import dash_bootstrap_components  as dbc
+from dash.exceptions import PreventUpdate 
 import plotly.express as px
 import pandas as pd
 import requests
@@ -49,6 +50,9 @@ def apiQuery(tier, query, variables):
     elif tier == 'STAGE':
         url = 'https://hub-stage.datacommons.cancer.gov/api/graphql'
         token = os.environ['STAGEAPI']
+    elif tier == 'PROD':
+        url = 'https://hub.datacommons.cancer.gov/api/graphql'
+        token = os.environ['PRODAPI']
     elif tier == None:
         return("No tier specified")
 
@@ -141,9 +145,8 @@ sidebar = html.Div(
                 html.Hr(),
                 dcc.Dropdown(
                     id = 'tierselector',
-                    options = ['STAGE', 'PROD'],
+                    options = ['DEV2','STAGE', 'PROD'],
                     multi = False,
-                    #value = 'STAGE',
                     style={'backgroundcolor':'1E1E1E'},
                 ),
                 dcc.Store(id='studystore'),
@@ -259,9 +262,6 @@ barcharts = html.Div(
 
 errorpie = html.Div(
     [
-    #html.Div(
-    #  dbc.Spinner(html.Div(id='errorspinner'), color="primary")  
-    #),
     html.Div(
         #Error Pie Chart
         className='ValidationErrorPieChart',
@@ -298,7 +298,20 @@ dataheader = html.Div(
     style=CONTENT_STYLE
 )
 
+batchheader = html.Div(
+    [
+        html.Hr(),
+        html.H2("Batch History", id="batchtitle"),
+        html.Hr()
+    ],
+    style=CONTENT_STYLE
+)
 
+batchcontent = html.Div(
+    [
+        html.Div(id="batchcontent", style=CONTENT_STYLE)
+    ]
+)
 
 content = html.Div(id="page-content", style=CONTENT_STYLE)
 errorcontent = html.Div(
@@ -338,7 +351,16 @@ app.layout = html.Div([sidebar,
                                            tableheader, content, barcharts, errorpie
                                        ],
                                ),
-                               dcc.Tab(label="Errors",
+                               dcc.Tab(
+                                   label="Submission Batch History",
+                                   value="tab-batch",
+                                   style=TAB_STYLE,
+                                   selected_style=SELECTED_TAB_STYLE,
+                                   children=[
+                                       batchheader, batchcontent
+                                   ]
+                               ),
+                               dcc.Tab(label="Submission Errors",
                                        value = 'tab-errors',
                                        style = TAB_STYLE,
                                        selected_style = SELECTED_TAB_STYLE,
@@ -354,6 +376,7 @@ app.layout = html.Div([sidebar,
                                            dataheader, datacontent
                                        ]),
                            ],
+                           style=CONTENT_STYLE
                        )])
 
 
@@ -492,6 +515,13 @@ def errorTableTitle(errorselector, studyselector, subselector):
 def errorTableTitle(dataselector, studyselector, subselector):
     return ("Submitted Data:",html.Br(),"Study: "+studyselector,html.Br(),"Submission: "+subselector, html.Br(), "Node: "+dataselector)
 
+@app.callback(
+    Output("batchtitle", "children"),
+    Input(component_id="subselector", component_property="value")
+)
+def batchTableTitle(subselector):
+    return(f"Batch History for Submission: {subselector}")
+
 
 
 ####################### Drop-down callbacks##################################
@@ -513,11 +543,13 @@ def populateStudyDropdown(studystore):
     Input(component_id='studyselector', component_property='value'),
     State(component_id='submissionstore', component_property='data')
 )
-
 def populateSubmissionDropdown(studyselector, submissionstore):
-    sub_df = pd.read_json(io.StringIO(submissionstore),orient='split')
-    temp_df=sub_df[sub_df['studyAbbreviation'] == studyselector]
-    return temp_df['name'].unique()
+    if studyselector is None:
+        raise PreventUpdate
+    else:
+        sub_df = pd.read_json(io.StringIO(submissionstore),orient='split')
+        temp_df=sub_df[sub_df['studyAbbreviation'] == studyselector]
+        return temp_df['name'].unique()
 
 
 
@@ -577,7 +609,6 @@ def populateNodeSelector(subselector, submissionstore, tierselector):
 def populateStudyInfoTable(studyselector, submissionstore):
     sub_df = pd.read_json(io.StringIO(submissionstore),orient='split')
     table_df = sub_df.loc[sub_df['studyAbbreviation'] == studyselector]
-    id='studytable',
     data=table_df.to_dict('records')
     columns=[{"name":e, "id":e} for e in (table_df.columns)]
     return dash_table.DataTable(data=data, 
@@ -691,8 +722,49 @@ def errorDetailTable(errorselector, submissionstore, subselector, tierselector):
             )
     else:
         return {}
-           
-  
+
+
+@app.callback(
+    Output("batchcontent", "children"),
+    Input(component_id="subselector", component_property="value"),
+    State(component_id='submissionstore', component_property='data'),
+    State(component_id='tierselector', component_property='value')
+)
+def populateBatchTable(subselector, submissionstore, tierselector):
+    submission_df = pd.read_json(io.StringIO(submissionstore), orient='split')
+    idlist = submission_df.query("name == @subselector")["_id"].tolist()
+    if len(idlist)>=1:
+        queryvars = {"submissionID":idlist[0], "orderBy":"createdAt", "sortDirection":"DESC"}
+        batch_res = apiQuery(tierselector, dhq.list_batch_query, queryvars)
+        if batch_res['data']['listBatches']['total'] == None:
+            return {}
+        else:
+            batch_df = pd.DataFrame(columns=list(batch_res['data']['listBatches']['batches'][0].keys()))
+            for batch in batch_res['data']['listBatches']['batches']:
+                batch_df.loc[len(batch_df)] = batch
+            #Need to covert errors and files to string otherwise it borks the table
+            batch_df['errors'] = batch_df['errors'].astype(str)
+            batch_df['files'] = batch_df['files'].astype(str)
+            return dash_table.DataTable(
+                data=batch_df.to_dict('records'),
+                columns=[{"name":e, "id":e} for e in batch_df.columns],
+                style_table={'overflowX':'auto'},
+                style_cell={'overflow':'hidden', 'textOverflow':'ellipsis', 'maxWidth':10, 'textAlign':'center'},
+                style_data={'color':'black', 'backgroundColor':'white'},
+                style_data_conditional=[{'if':{'row_index':'odd'}, 'backgroundColor': 'rgb(220,220,220)'}],
+                style_header={'backgroundColor': 'rgb(210,210,210)', 'color':'black', 'fontWeight':'bold', 'textAlign':'center'},
+                tooltip_data=[
+                    {
+                        column:{'value': str(value), 'type':'markdown'}
+                        for column, value in row.items()
+                    } for row in batch_df.to_dict('records')
+                ],
+                tooltip_duration=None,
+                export_format="csv")
+    else:
+        return {}
+
+
 
 ############################## Graph Callbacks###################################
 
@@ -794,12 +866,6 @@ def subStatusPercentageChart(subselector, submissionstore, tierselector):
     else:
         return {}
 
-
-
- 
-
-
-
     
 
 ####################################
@@ -811,4 +877,4 @@ def subStatusPercentageChart(subselector, submissionstore, tierselector):
 
 #app.run_server(port=8050, debug=True)
 if __name__ == "__main__":
-    app.run_server(port=8050, debug=True)
+    app.run(port=8050, debug=True)

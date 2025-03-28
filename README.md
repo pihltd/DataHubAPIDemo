@@ -21,4 +21,5 @@ This notebook covers several queries that can provide more detailed information 
 - Retrieving a populated configuration file for use in uploading data files with the CLI Upload Tool
 
 ## SubmissionReportDashboard.py
-This is a Python Dash application that uses the APIs to populate a dashboard of your submissions.
+This is a Python Dash application that uses the APIs to create a personal dashboard of your submissions.
+- Requires a DataHub API token to retrieve data
