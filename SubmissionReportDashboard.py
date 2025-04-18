@@ -830,7 +830,6 @@ def subStatusChart(subselector, submissionstore, tierselector):
         substats_df = pd.DataFrame(columns=columns)
         for entry in query_res['data']['submissionStats']['stats']:
             substats_df.loc[len(substats_df)] = entry
-    
         return px.bar(substats_df, x='nodeName', y=['new', 'error', 'warning', 'passed'])
     else:
         return {}
@@ -855,14 +854,19 @@ def subStatusPercentageChart(subselector, submissionstore, tierselector):
             substats_df.loc[len(substats_df)] = entry
         #Add percentages to df
         calccolumns = columns = ['new', 'error', 'warning', 'passed']
-        for col in calccolumns:
-            newcol = col+"_percentage"
-            percentages = []
-            for index, row in substats_df.iterrows():
-                percentages.append((row[col]/row['total'])*100)
-            substats_df.insert(index, newcol, percentages)
-        
-        return px.bar(substats_df, x='nodeName', y=['new_percentage', 'error_percentage', 'warning_percentage', 'passed_percentage'])
+        newcol = ['nodeName', 'new_percentage', 'error_percentage', 'warning_percentage', 'passed_percentage']
+        per_df = pd.DataFrame(columns=newcol)
+        for index, row in substats_df.iterrows():
+            newrow = {}
+            newrow['nodeName'] = row['nodeName']
+            for column in calccolumns:
+                if row['total'] > 0:
+                    newrow[column+'_percentage'] = (row[column]/row['total'])*100
+                else:
+                    newrow[column+'_percentage'] = 0
+            per_df.loc[len(per_df)] = newrow
+
+        return px.bar(per_df, x='nodeName', y=['new_percentage', 'error_percentage', 'warning_percentage', 'passed_percentage'])
     else:
         return {}
 
