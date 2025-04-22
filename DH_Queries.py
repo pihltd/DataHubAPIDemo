@@ -155,7 +155,6 @@ detailedQCQuery = """
         $offset: Int,
         $orderBy: String,
         $sortDirection: String
-        $issueCode: String
     ){
         submissionQCResults(
             _id:$id,
@@ -164,7 +163,6 @@ detailedQCQuery = """
             offset: $offset,
             orderBy: $orderBy,
             sortDirection: $sortDirection,
-            issueCode: $issueCode
         ){
         total
         results{
@@ -254,3 +252,4 @@ query ListBatches(
   }
 }
 """
+

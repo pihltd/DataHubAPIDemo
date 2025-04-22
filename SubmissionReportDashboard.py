@@ -43,7 +43,7 @@ app.title ="DH Dashboard"
 #       Subroutines                   #
 #                                     #
 #######################################
-def apiQuery(tier, query, variables):
+def apiQuery(tier, query, variables, queryprint = False):
     if tier == 'DEV2':
         url = 'https://hub-dev2.datacommons.cancer.gov/api/graphql'
         token = os.environ['DEV2API']
@@ -61,8 +61,13 @@ def apiQuery(tier, query, variables):
     try:
         if variables is None:
             result = requests.post(url = url, headers = headers, json={"query": query})
+            if queryprint:
+                print(query)
         else:
             result = requests.post(url = url, headers = headers, json = {"query":query, "variables":variables})
+            if queryprint:
+                print(query)
+                print(variables)
         if result.status_code == 200:
             return result.json()
         else:
@@ -692,17 +697,21 @@ def errorDetailTable(errorselector, submissionstore, subselector, tierselector):
         else:
             
             table_df = pd.DataFrame(sub_res['data']['aggregatedSubmissionQCResults']['results'])
-            #Need the code for the error
-            errorcode = table_df.query("title == @errorselector")['code'].tolist()[0]
-            errorvars = {"id": idlist[0], "severities":"All", "first": -1, "offset": 0, "orderBy":"displayID", "sortDirection":"desc", "issueCode":errorcode}
+            errorvars = {"id": idlist[0], "severities":"All", "first": -1, "offset": 0, "orderBy":"displayID", "sortDirection":"desc"}
             detail_res = apiQuery(tierselector, dhq.detailedQCQuery, errorvars)
-            columns = ['title', 'description']
+            columns = ['type', 'title', 'description']
             error_df = pd.DataFrame(columns=columns)
             for result in detail_res['data']['submissionQCResults']['results']:
                 for error in result['errors']:
                     #the following filter is needed because if an entity has more then one error, all are returned by the system.  That's a feature, not a bug.
                     if error['title'] == errorselector:
+                        error['type'] = 'Error'
                         error_df.loc[len(error_df)] = error
+                #Do the same for warnings
+                for warning in result['warnings']:
+                    if warning['title'] == errorselector:
+                        warning['type'] = 'Warning'
+                        error_df.loc[len(error_df)] = warning
             return dash_table.DataTable(
                 data=error_df.to_dict('records'),
                 columns=[{"name":e, "id":e} for e in (error_df.columns)],
