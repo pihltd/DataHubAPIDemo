@@ -155,7 +155,6 @@ detailedQCQuery = """
         $offset: Int,
         $orderBy: String,
         $sortDirection: String
-        $issueCode: String
     ){
         submissionQCResults(
             _id:$id,
@@ -164,7 +163,6 @@ detailedQCQuery = """
             offset: $offset,
             orderBy: $orderBy,
             sortDirection: $sortDirection,
-            issueCode: $issueCode
         ){
         total
         results{
@@ -221,3 +219,37 @@ getSubmissionNodes(
     }
 }
 """
+
+
+list_batch_query ="""
+query ListBatches(
+  $submissionID: ID!,
+  $orderBy: String,
+ $sortDirection: String) {
+  listBatches(submissionID: $submissionID,
+             orderBy: $orderBy,
+             sortDirection: $sortDirection) {
+    total
+    batches {
+      _id
+      submissionID
+      createdAt
+      updatedAt
+      displayID
+      type
+      fileCount
+      status
+      errors
+      files {
+        fileName
+        nodeType
+        size
+        status
+        errors
+        createdAt
+      }
+    }
+  }
+}
+"""
+
