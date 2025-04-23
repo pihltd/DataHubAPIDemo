@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 import time
 import json
 import io
+from pytz import timezone as tz
 
 
 #######################################
@@ -79,17 +80,41 @@ def apiQuery(tier, query, variables, queryprint = False):
 
  
 def elapsedTime(submission_df):
-    submission_df['createdAt'] = pd.to_datetime(submission_df['createdAt'])
-    submission_df['updatedAt'] = pd.to_datetime(submission_df['updatedAt'])
     days = []
     for index, row in submission_df.iterrows():
-        update = row['updatedAt']
+        temp = row['updatedAt'].split('T')
+        update = datetime.strptime(temp[0], '%Y-%m-%d')
+        update = update.replace(tzinfo=tz('UTC'))
         now = datetime.now(timezone.utc)
         diff = (now - update).days
         days.append(diff)
     submission_df.insert(8,'inactiveDays',days,True)
     return submission_df
 
+
+def bracketParse(parsethis):
+    first = parsethis.split("]")
+    errorstring = first[1]
+    if "[" in errorstring:
+        second = errorstring.split("[")
+        return second[0]
+    else:
+        return errorstring
+
+
+def updateAggregation(df):
+    filelist = []
+    columns = ['title', 'description', 'count']
+    agg_df = pd.DataFrame(columns=columns)
+    for index, row in df.iterrows():
+        if row['title'] == 'Updating existing data':
+            if "file_id" in row['description']:
+                filelist.append(row['description'])
+        else:
+            agg_df.loc[len(agg_df)] = row
+    if len(filelist) > 0:
+        agg_df.loc[len(agg_df)] = {'title': 'Updating existing data', 'description': 'File update', 'count': len(filelist)}
+    return agg_df
 
 ############################################
 #                                          #
@@ -292,6 +317,30 @@ errorpie = html.Div(
     style=CONTENT_STYLE
 )
 
+errorsummary = html.Div(
+    [
+        html.Div(
+            className='ErrorSummaryTable',
+            children=[
+                html.Hr(),
+                html.H2("Validation Error Summary"),
+                html.Div(id="validationerrorsummary")
+            ],
+            style={'width':'49%', 'display':'inline-block'},
+        ),
+        html.Div(
+            className='WarningSummaryTable',
+            children=[
+                html.Hr(),
+                html.H2("Validation Warning Summary"),
+                html.Div(id='validationswarningsummary')
+            ],
+            style={'width': '49%','display':'inline-block'},
+        ),
+    ],
+    style={"margin-left": "18rem","margin-right": "12rem","padding": "2rem 1 rem","display": "flex"}
+)
+
 
 
 dataheader = html.Div(
@@ -353,7 +402,7 @@ app.layout = html.Div([sidebar,
                                        style = TAB_STYLE,
                                        selected_style = SELECTED_TAB_STYLE,
                                        children=[
-                                           tableheader, content, barcharts, errorpie
+                                           tableheader, content, barcharts, errorpie, errorsummary
                                        ],
                                ),
                                dcc.Tab(
@@ -367,6 +416,7 @@ app.layout = html.Div([sidebar,
                                ),
                                dcc.Tab(label="Submission Errors",
                                        value = 'tab-errors',
+                                       id = 'errortab',
                                        style = TAB_STYLE,
                                        selected_style = SELECTED_TAB_STYLE,
                                        children=[
@@ -694,9 +744,8 @@ def errorDetailTable(errorselector, submissionstore, subselector, tierselector):
         sub_res = apiQuery(tierselector, dhq.summaryQuery, subvars)
         if sub_res['data']['aggregatedSubmissionQCResults']['total'] == None:
             return {}
-        else:
-            
-            table_df = pd.DataFrame(sub_res['data']['aggregatedSubmissionQCResults']['results'])
+        else:   
+            #table_df = pd.DataFrame(sub_res['data']['aggregatedSubmissionQCResults']['results'])
             errorvars = {"id": idlist[0], "severities":"All", "first": -1, "offset": 0, "orderBy":"displayID", "sortDirection":"desc"}
             detail_res = apiQuery(tierselector, dhq.detailedQCQuery, errorvars)
             columns = ['type', 'title', 'description']
@@ -774,7 +823,97 @@ def populateBatchTable(subselector, submissionstore, tierselector):
         return {}
 
 
+@app.callback(
+    Output("validationerrorsummary", "children"),
+    Input(component_id='subselector', component_property='value'),
+    State(component_id='submissionstore', component_property='data'),
+    State(component_id='tierselector', component_property='value'),
+)
+def validationErrorSummaryTable(subselector, submissionstore, tierselector):
+    sub_df = pd.read_json(io.StringIO(submissionstore),orient='split')
+    idlist = sub_df.query("name == @subselector")["_id"].tolist()
+    if len(idlist) >= 1:
+        subvars = {"submissionID":idlist[0], "severity":"All", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
+        sub_res = apiQuery(tierselector, dhq.summaryQuery, subvars)
+        if sub_res['data']['aggregatedSubmissionQCResults']['total'] == None:
+            return {}
+        else:
+            columns = ['type', 'title', 'description']
+            error_df = pd.DataFrame(columns=columns)
+            errorvars = {"id": idlist[0], "severities":"Error", "first": -1, "offset": 0, "orderBy":"displayID", "sortDirection":"desc"}
+            detail_res = apiQuery(tierselector, dhq.detailedQCQuery, errorvars)
+            for result in detail_res['data']['submissionQCResults']['results']:
+                for error in result['errors']:
+                    message = bracketParse(error['description'])
+                    error_df.loc[len(error_df)] = {'type':'Error', 'title':error['title'], 'description':message}
+            summary_df = error_df.groupby(['title', 'description']).size().reset_index().rename(columns={0:'count'}).sort_values(by='count', ascending=False)
+            return dash_table.DataTable(
+                data=summary_df.to_dict('records'),
+                columns=[{"name":e, "id":e} for e in summary_df.columns],
+                style_table={'overflowX':'auto'},
+                style_cell={'overflow':'hidden', 'textOverflow':'ellipsis', 'maxWidth':10, 'textAlign':'center'},
+                style_data={'color':'black', 'backgroundColor':'white'},
+                style_data_conditional=[{'if':{'row_index':'odd'}, 'backgroundColor': 'rgb(220,220,220)'}],
+                style_header={'backgroundColor': 'rgb(210,210,210)', 'color':'black', 'fontWeight':'bold', 'textAlign':'center'},
+                tooltip_data=[
+                    {
+                        column:{'value': str(value), 'type':'markdown'}
+                        for column, value in row.items()
+                    } for row in summary_df.to_dict('records')
+                ],
+                tooltip_duration=None,
+                export_format="csv"
+            )
+    else:
+        return {}
 
+
+
+@app.callback(
+    Output("validationswarningsummary", "children"),
+    Input(component_id='subselector', component_property='value'),
+    State(component_id='submissionstore', component_property='data'),
+    State(component_id='tierselector', component_property='value'),
+)
+def validationWarningSummaryTable(subselector, submissionstore, tierselector):
+    sub_df = pd.read_json(io.StringIO(submissionstore),orient='split')
+    idlist = sub_df.query("name == @subselector")["_id"].tolist()
+    if len(idlist) >= 1:
+        subvars = {"submissionID":idlist[0], "severity":"All", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
+        sub_res = apiQuery(tierselector, dhq.summaryQuery, subvars)
+        if sub_res['data']['aggregatedSubmissionQCResults']['total'] == None:
+            return {}
+        else:
+            columns = ['type', 'title', 'description']
+            error_df = pd.DataFrame(columns=columns)
+            errorvars = {"id": idlist[0], "severities":"Warning", "first": -1, "offset": 0, "orderBy":"displayID", "sortDirection":"desc"}
+            detail_res = apiQuery(tierselector, dhq.detailedQCQuery, errorvars)
+            for result in detail_res['data']['submissionQCResults']['results']:
+                for error in result['warnings']:
+                    message = bracketParse(error['description'])
+                    error_df.loc[len(error_df)] = {'type':'Error', 'title':error['title'], 'description':message}
+            temp_df = error_df.groupby(['title', 'description']).size().reset_index().rename(columns={0:'count'}).sort_values(by='count', ascending=False)
+            summary_df = updateAggregation(temp_df)
+            return dash_table.DataTable(
+                data=summary_df.to_dict('records'),
+                columns=[{"name":e, "id":e} for e in summary_df.columns],
+                style_table={'overflowX':'auto'},
+                style_cell={'overflow':'hidden', 'textOverflow':'ellipsis', 'maxWidth':10, 'textAlign':'center'},
+                style_data={'color':'black', 'backgroundColor':'white'},
+                style_data_conditional=[{'if':{'row_index':'odd'}, 'backgroundColor': 'rgb(220,220,220)'}],
+                style_header={'backgroundColor': 'rgb(210,210,210)', 'color':'black', 'fontWeight':'bold', 'textAlign':'center'},
+                tooltip_data=[
+                    {
+                        column:{'value': str(value), 'type':'markdown'}
+                        for column, value in row.items()
+                    } for row in summary_df.to_dict('records')
+                ],
+                tooltip_duration=None,
+                export_format="csv"
+            )
+    else:
+        return {}
+            
 ############################## Graph Callbacks###################################
 
 
