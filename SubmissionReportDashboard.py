@@ -894,6 +894,7 @@ def validationWarningSummaryTable(subselector, submissionstore, tierselector):
                     error_df.loc[len(error_df)] = {'type':'Error', 'title':error['title'], 'description':message}
             temp_df = error_df.groupby(['title', 'description']).size().reset_index().rename(columns={0:'count'}).sort_values(by='count', ascending=False)
             summary_df = updateAggregation(temp_df)
+            summary_df = summary_df.sort_values(by='count', ascending=False)
             return dash_table.DataTable(
                 data=summary_df.to_dict('records'),
                 columns=[{"name":e, "id":e} for e in summary_df.columns],
