@@ -29,6 +29,8 @@ query ListSubmissions($status: [String]){
       metadataValidationStatus
       fileValidationStatus
       status
+      dataCommons
+      modelVersion
     }
   }
 }
