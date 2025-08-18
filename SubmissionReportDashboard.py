@@ -474,6 +474,15 @@ def populateSubmissionStore(studystore, studyselector, tierselector):
     return sub_df.reset_index().to_json(orient='split')
 
 
+#@app.callback(
+#    Output('submissionstore', 'clear_data'),
+#    Input(component_id='tierselector', component_property='value')
+#)
+#def clearSubmissionStore(tierselector):
+#     return True
+    
+
+
 ###################### Spinner Callbacks ##################################
 
 
