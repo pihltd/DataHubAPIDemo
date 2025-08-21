@@ -3,6 +3,7 @@ import requests
 import pandas as pd
 import DH_Queries as dhq
 import os
+from ShinyDashboardModules import dropdown_ui, df_table
 
 
 ### Useful links
@@ -53,57 +54,19 @@ def apiQuery(tier, query, variables, queryprint = False):
 #         Layouts                  #
 #                                  #
 ####################################
-tiers_dropdown = ui.input_select(
-    id="tierSelect", 
-    label = "Tier", 
-    choices = {"STAGE":"Stage","DEV2":"Dev2"}, 
-    selected = None, 
-    multiple = False
-)
 
-study_dropdown = ui.input_select(
-    id='studySelect',
-    label='Studies',
-    choices=[],
-    selected=None,
-    multiple=False
-)
-
-submission_dropdown = ui.input_select(
-    id='submissionSelect',
-    label='Submissions',
-    choices=[],
-    selected=None,
-    multiple=False
-)
-errors_dropdown = ui.input_select(
-    id='errorSelect',
-    label='Errors',
-    choices=[],
-    selected=None,
-    multiple=False
-)
-
-data_dropdown = ui.input_select(
-    id='dataSelect',
-    label='Data',
-    choices=[],
-    selected=None,
-    multiple=False
-)
 sidebar = ui.layout_sidebar(
-        ui.sidebar(
-            "Select a Tier",
-            tiers_dropdown,
-            study_dropdown,
-            submission_dropdown,
-            errors_dropdown,
-            data_dropdown,
-            bg="#4287f5"
-        )
+    ui.sidebar(
+        "Select a tier",
+        dropdown_ui("tierSelect", "Tier", {"STAGE":"Stage","DEV2":"Dev2"}),
+        dropdown_ui("studySelect", "Studies", []),
+        dropdown_ui("submissionSelect", "Submissions", []),
+        dropdown_ui("errorSelect", "Errors", []),
+        dropdown_ui("dataSelect", "Data",[]),
+        bg="#4287f5"
     )
-
-
+)
+'''
 mainpage = ui.navset_card_underline(
     ui.nav_panel(ui.card(ui.output_text("mainpagevalue")),
                 ui.card(ui.output_data_frame('studyInfo'))),
@@ -128,14 +91,20 @@ tab_layout2 = ui.navset_pill(
     ui.nav_panel("Errors","errorpage"),
     ui.nav_panel("Data", "datapage")
 )
+'''
+tab_layout3=ui.navset_pill(
+    ui.nav_panel("Main",df_table("studyInfo")),
+    ui.nav_panel("Errors", df_table("errorInfo")),
+    ui.nav_panel("Data", df_table("dataInfo"))
+)
 
 app = ui.page_fluid(
     ui.panel_title(ui.h2("CRDC Submission Dashboard")),
     ui.layout_columns(
         sidebar,
-        tab_layout,
+        tab_layout3,
         #ui.output_text("selectedtier"),
-        ui.output_text("studyCall"),
+        #ui.output_text("studyCall"),
         #col_widths=(3,7,2)
         col_widths=(3,9)
     )    
@@ -151,9 +120,18 @@ app = ui.page_fluid(
     
 def server(input, output, session):
     
-    studycolumns = ['_id', 'studyAbbreviation', 'studyName', 'dbGaPID']
-    study_df = pd.DataFrame(columns=studycolumns)
-
+    @reactive.calc
+    def studyDF():
+        studyjson = apiQuery(input.tierSelect(), dhq.org_query, None, False)
+        study_df = pd.DataFrame(studyjson['data']['getMyUser']['studies'])
+        return study_df
+    
+    @reactive.calc
+    def submissionDF():
+        fulljson = apiQuery(input.tierSelect(), dhq.list_sub_query, {"status":["All"]})
+        sub_df = pd.DataFrame(fulljson['data']['listSubmissions']['submissions'])
+        return sub_df
+        
 
     @render.text
     def selectedtier():
@@ -171,23 +149,17 @@ def server(input, output, session):
     
     @render.data_frame
     def studyInfo():
-        studyjson = apiQuery(input.tierSelect(), dhq.org_query, None, False)
-        #columns = ['_id', 'studyAbbreviation', 'studyName', 'dbGaPID']
-        #study_df = pd.DataFrame(columns=columns)
-        for entry in studyjson['data']['getMyUser']['studies']:
-            study_df.loc[len(study_df)] = entry
-        return render.DataTable(study_df, editable=False)
+        return render.DataGrid(studyDF(), selection_mode='row')
+    
     @render.data_frame
-    def subInfo():
-        fulljson = apiQuery(input.tierSelect(), dhq.list_sub_query, {"status":["All"]})
-        sub_df = pd.DataFrame(fulljson['data']['listSubmissions']['submissions'])
-        working_df = sub_df.loc[sub_df['_id'] == input.studySelect()]
-        return render.DataTable(working_df, editable=False)
+    def errorInfo():
+        working_df = submissionDF().loc[submissionDF()['studyID'] == input.studySelect()]
+        return render.DataGrid(working_df, selection_mode='row')
     
     @reactive.effect
     def updateStudy():
         study_items = {}
-        for index, row in study_df.iterrows():
+        for index, row in studyDF().iterrows():
             study_items[row['_id']] = row['studyAbbreviation']
         ui.update_select(
             "studySelect",
@@ -196,9 +168,7 @@ def server(input, output, session):
     @reactive.effect
     def updateSubmisions():
         submission_items = {}
-        fulljson = apiQuery(input.tierSelect(), dhq.list_sub_query, {"status":["All"]})
-        sub_df = pd.DataFrame(fulljson['data']['listSubmissions']['submissions'])
-        working_df = sub_df.loc[sub_df['_id'] == input.studySelect()]
+        working_df = submissionDF().loc[submissionDF()['studyID'] == input.studySelect()]
         for index, row in working_df.iterrows():
             submission_items[row["_id"]] = row['name']
         ui.update_select(
