@@ -13,11 +13,13 @@ def dropdown_ui(id, label, choices):
         multiple=False
     )
     
-def df_table(id):
+def df_table(id, tablename):
     return ui.navset_card_underline(
         ui.nav_panel(
             ui.card(
-                ui.output_data_frame(id)
+                ui.card_header(tablename),
+                ui.output_data_frame(id),
+                full_screen=True
             )
         )
     )
