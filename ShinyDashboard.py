@@ -6,10 +6,13 @@ import os
 from ShinyDashboardModules import dropdown_ui, df_table
 from datetime import datetime, timezone
 from pytz import timezone as tz
+from shinywidgets import render_widget, output_widget
+import plotly.express as px
 
 
 ### Useful links
 # https://shiny.posit.co/py/gallery/
+# https://shiny.posit.co/py/templates/dashboard/
 
 
 #######################################
@@ -75,6 +78,18 @@ def elapsedTime(submission_df):
     submission_df.insert(8,'inactiveDays',days,True)
     return submission_df
 
+####################################
+#                                  #
+#         Table Styles             #
+#                                  #
+####################################
+
+#tableStyle = [
+#    
+
+
+
+
 
 ####################################
 #                                  #
@@ -94,7 +109,9 @@ sidebar = ui.layout_sidebar(
         ui.input_checkbox_group(
             "subStatus",
             "Submission State",
-            ["All","New", "In Progress", "Submitted", "Released", "Completed","Cancelled", "Rejected", "Withdrawn", "Deleted" "Archived"]
+            ["All","New", "In Progress", "Submitted", "Released", 
+             "Completed","Cancelled", "Rejected", "Withdrawn", "Deleted" "Archived"],
+            selected='All'
         ),
         dropdown_ui("tierSelect", "Tier", {"BUPKIS":"Select a Tier", "STAGE":"Stage","DEV2":"Dev2"}),
         dropdown_ui("studySelect", "Studies", []),
@@ -106,7 +123,8 @@ sidebar = ui.layout_sidebar(
 )
 
 tab_layout=ui.navset_pill(
-    ui.nav_panel("Main",df_table("studyInfo", "Submission Information")),
+    ui.nav_panel("Main",df_table("studyInfo", "Submission Information"),
+                 output_widget("errorPie")),
     ui.nav_panel("Errors", df_table("errorSummaryInfo", "Error Summary"), df_table("errorInfo", "Full Error Information")),
     ui.nav_panel("Data", df_table("dataInfo", "Data Information"))
 )
@@ -117,7 +135,7 @@ app = ui.page_fluid(
         sidebar,
         tab_layout,
         #ui.output_text("selectedtier"),
-        ui.output_text("studyCall"),
+        #ui.output_text("studyCall"),
         #col_widths=(3,7,2)
         col_widths=(3,9)
     )    
@@ -172,23 +190,49 @@ def server(input, output, session):
                     error_df.loc[len(error_df)] = {'type': 'Error', 'title': error['title'], 'description': desc}
         return error_df
     
-    #SUMMARY ERROR INFORMATION
+    # PROCESSED SUMMARY ERROR INFORMATION
+    # This takes the fine grained error info and counts the description
     @reactive.calc
-    @reactive.event(input.submissionSelect, ignore_init=True, ignore_none=True)
-    def errorSummaryDF():
-        columns = ['type', 'title', 'description']
+    @reactive.event(input.submissionSelect)
+    def processedErrorSummaryDF():
+        columns = ['severity','node', 'title', 'description']
         working_df = pd.DataFrame(columns=columns)
-        errorvars = {"id": input.submissionSelect(), "severities":"Error", "first": -1, "offset": 0, "orderBy":"displayID", "sortDirection":"desc"}
+        errorvars = {"id": input.submissionSelect(), "severities":"All", "first": -1, "offset": 0, "orderBy":"displayID", "sortDirection":"desc"}
         error_res = apiQuery(input.tierSelect(), dhq.detailedQCQuery, errorvars)
+        working_df.loc[len(working_df)] = {'type':'Check', 'title':'QC Results Query', 'description':'Initial Entry'}
         if error_res['data']['submissionQCResults']['total'] > 0:
+            working_df.loc[len(working_df)] = {'type':'Check', 'title':'QC Results Query', 'description':'More than 0 errors'}
             for result in error_res['data']['submissionQCResults']['results']:
                 for error in result['errors']:
                     message = bracketParse(error['description'])
-                    working_df.loc[len(working_df)] = {'type':'Error', 'title':error['title'], 'description':message}
-            errorSummary_df = working_df.groupby(['title', 'description']).size().reset_index().rename(columns={0:'count'}).sort_values(by='count', ascending=False)
+                    working_df.loc[len(working_df)] = {'severity':result['severity'], 
+                                                       'node': result['type'], 
+                                                       'title': error['title'], 
+                                                       'description': message}
+            errorSummary_df = working_df.groupby(['node', 'title','description']).size().reset_index().rename(columns={0:'count'}).sort_values(by='count', ascending=False)
         else:
-            errorSummary_df = pd.DataFrame({'type': ['None'], 'title': ['None'], 'description': ['None']})
+            errorSummary_df = pd.DataFrame({'severity': ['None'],
+                                            'node': ['None'], 
+                                            'title': ['None'], 
+                                            'description': ['None'], 
+                                            'count':[0]})
         return errorSummary_df
+    
+    # NORMAL SUMMARY ERROR INFO
+    # VERY high level, no detailed descriptions
+    @reactive.calc
+    @reactive.event(input.submissionSelect, ignore_init=True, ignore_none=True)
+    def errorSummaryDF():
+        vars = {"id": input.submissionSelect(), "severities":"All", "first": -1, "offset": 0, "orderBy":"displayID", "sortDirection":"desc"}
+        res = apiQuery(input.tierSelect(), dhq.summaryQuery, vars)
+        if 'data' in res:
+            if res['data']['aggregatedSubmissionQCResults']['total'] > 0:
+                summary_df = pd.DataFrame(res['data']['aggregatedSubmissionQCResults']['results'])
+            else:
+                summary_df = pd.DataFrame({'title': ['None'], 'severity': ['None'], 'count': ['0'], 'code': ['None']})
+        else:
+            summary_df = pd.DataFrame({'title': ['None'], 'severity': ['None'], 'count': ['0'], 'code': ['None']})
+        return summary_df
         
     # DATA INFORMATION
     @reactive.calc
@@ -231,20 +275,20 @@ def server(input, output, session):
     
     @render.data_frame
     def studyInfo():
-        return render.DataGrid(submissionDF(), selection_mode='row')
+        return render.DataGrid(submissionDF(), selection_mode='row', filters=True)
     
     @render.data_frame
     def errorInfo():
-        return render.DataGrid(errorDF(), selection_mode='row')
+        return render.DataGrid(errorDF(), selection_mode='row', filters=True)
         
     
     @render.data_frame
     def errorSummaryInfo():
-        return render.DataGrid(errorSummaryDF(), selection_mode='row')
+        return render.DataGrid(processedErrorSummaryDF(), selection_mode='row', filters=True)
     
     @render.data_frame
     def dataInfo():
-        return render.DataGrid(dataDF(), selection_mode='row')
+        return render.DataGrid(dataDF(), selection_mode='row', filters=True)
     
     
     ####################################
@@ -277,7 +321,7 @@ def server(input, output, session):
         )
         
     @reactive.effect    
-    @reactive.event(input.submissionSelect, ignore_init=True, ignore_none=True)
+    @reactive.event(input.submissionSelect, ignore_init=True)
     def updateErrors():
         error_items = {}
         queryvars = {"submissionID":input.submissionSelect(), "severity":"All", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
@@ -310,7 +354,23 @@ def server(input, output, session):
             choices=data_items
         )
         
-
+    ####################################
+    #                                  #
+    #       Charts and Pies            #
+    #                                  #
+    ####################################
+    
+    @render_widget
+    @reactive.event(input.submissionSelect)
+    def errorPie():
+        error_pie = px.pie(
+            #errorSummaryDF(),
+            processedErrorSummaryDF(),
+            values='count',
+            names='title',
+            hole=.3
+        )
+        return error_pie
 
 # https://shiny.posit.co/py/get-started/create-run.html
 app = App(app, server)

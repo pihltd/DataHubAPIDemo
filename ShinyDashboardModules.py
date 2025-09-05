@@ -10,7 +10,7 @@ def dropdown_ui(id, label, choices):
         label=label,
         choices=choices,
         selected=None,
-        multiple=False
+        multiple=True
     )
     
 def df_table(id, tablename):
