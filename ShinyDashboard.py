@@ -21,6 +21,7 @@ import plotly.express as px
 #                                     #
 #######################################
 def apiQuery(tier, query, variables, queryprint = False):
+    token = None
     if tier == 'DEV2':
         url = 'https://hub-dev2.datacommons.cancer.gov/api/graphql'
         token = os.environ['DEV2API']
@@ -35,25 +36,25 @@ def apiQuery(tier, query, variables, queryprint = False):
     elif tier == None:
         return("No tier specified")
 
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        if variables is None:
-            result = requests.post(url = url, headers = headers, json={"query": query})
-            if queryprint:
-                print(query)
-        else:
-            result = requests.post(url = url, headers = headers, json = {"query":query, "variables":variables})
-            if queryprint:
-                print(query)
-                print(variables)
-        if result.status_code == 200:
-            return result.json()
-        else:
-            print(f"Error: {result.status_code}")
-            return result.content
-    except requests.exceptions.HTTPError as e:
-        return(f"HTTP Error: {e}")
+        headers = {"Authorization": f"Bearer {token}"}
+    if token is not None:
+        try:
+            if variables is None:
+                result = requests.post(url = url, headers = headers, json={"query": query})
+                if queryprint:
+                    print(query)
+            else:
+                result = requests.post(url = url, headers = headers, json = {"query":query, "variables":variables})
+                if queryprint:
+                    print(query)
+                    print(variables)
+            if result.status_code == 200:
+                return result.json()
+            else:
+                print(f"Error: {result.status_code}")
+                return result.content
+        except requests.exceptions.HTTPError as e:
+            return(f"HTTP Error: {e}")
 
 
 
