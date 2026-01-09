@@ -30,7 +30,7 @@ This is a Python Dash application that uses the APIs to create a personal dashbo
 Simialr to the SubmissionReportDashboard only uses Python Shiny instead of Dash.
 
 
-# SubmissionReset.py and SubmissionReset.ipynb
+## SubmissionReset.py and SubmissionReset.ipynb
 Submissions that are inactive for extended periods of time start generating warning emails and after 180 days get deleted.  The remedy to this situation is to log into the Submission Portal and look at the submission.  However, this gets burdensome if there are a large number of submissions to check.  This script (also in notebook form) will query for all the submissions that are either New or In Progress and will request information from each of them.  This re-sets the inactvitiy timer.  
 
 ## WarningAggregator.ipynb and WarningAggregator.py
