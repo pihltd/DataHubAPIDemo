@@ -30,5 +30,8 @@ This is a Python Dash application that uses the APIs to create a personal dashbo
 Simialr to the SubmissionReportDashboard only uses Python Shiny instead of Dash.
 
 
-## WarningAggregator.ipynb and WarningAggregator.py
+# SubmissionReset.py and SubmissionReset.ipny
 Submissions that are inactive for extended periods of time start generating warning emails and after 180 days get deleted.  The remedy to this situation is to log into the Submission Portal and look at the submission.  However, this gets burdensome if there are a large number of submissions to check.  This script (also in notebook form) will query for all the submissions that are either New or In Progress and will request information from each of them.  This re-sets the inatvitiy timer.  
+
+## WarningAggregator.ipynb and WarningAggregator.py
+When updating a submission that has previously been through DataHub, it's possible to get a great number of warnings that data is going to be changed.  Unfortunately, the current Submission Portal interface doesn't have a way to aggregate and display these warnings which can make it difficult and tedious to check.  This script and notebook will aggregate all the warnings in a submission and display alternating old and new lines in a table(notebook) or output a csv file (script).  
