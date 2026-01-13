@@ -28,7 +28,7 @@ def apiQuery(tier, query, variables, verbose=0):
             result = requests.post(url = url, headers = headers, json = {"query":query, "variables":variables})
         if result.status_code == 200:
             if verbose >= 3:
-                print(result.json())
+                print(f"Query result:\n{result.json}")
             return result.json()
         else:
             print(f"Error: {result.status_code}")
@@ -76,6 +76,8 @@ def main(args):
     if args.verbose >= 1:
         print("Getting list of New and In Progress Submissions")
     subres = apiQuery(args.tier.lower(), list_sub_query, list_sub_vars)
+    if args.verbose >= 3:
+        print(f"Result from API query:\n{subres}")
     sub_df = pd.DataFrame(subres['data']['listSubmissions']['submissions'])
     if args.verbose >= 2:
         print("Submissions to be updated")
