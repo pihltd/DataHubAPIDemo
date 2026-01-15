@@ -5,5 +5,11 @@ node: 'diagnosis'
 # Shouldn't need to edit anything below this line
 mdffiles:
   CDS:
-  - "https://raw.githubusercontent.com/CBIIT/cds-model/refs/heads/{}/model-desc/cds-model.yml"
-  - "https://raw.githubusercontent.com/CBIIT/cds-model/refs/heads/{}/model-desc/cds-model-props.yml"
+    - "https://raw.githubusercontent.com/CBIIT/cds-model/refs/heads/{}/model-desc/cds-model.yml"
+    - "https://raw.githubusercontent.com/CBIIT/cds-model/refs/heads/{}/model-desc/cds-model-props.yml"
+  ICDC:
+    - "https://raw.githubusercontent.com/CBIIT/icdc-model-tool/refs/tags/{}/model-desc/icdc-model.yml"
+    - "https://raw.githubusercontent.com/CBIIT/icdc-model-tool/refs/tags/{}/model-desc/icdc-model-props.yml"
+  CTDC:
+    - "https://raw.githubusercontent.com/CBIIT/ctdc-model/refs/tags/{}/model-desc/ctdc_model_file.yaml"
+    - "https://raw.githubusercontent.com/CBIIT/ctdc-model/refs/tags/{}/model-desc/ctdc_model_properties_file.yaml"
