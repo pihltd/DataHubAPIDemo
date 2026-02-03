@@ -4,7 +4,6 @@ import dash_bootstrap_components  as dbc
 import requests
 import pandas as pd
 import io
-import json
 from datetime import datetime, timezone
 from pytz import timezone as tz
 import os
