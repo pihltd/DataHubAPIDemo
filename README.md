@@ -1,7 +1,7 @@
 # DataHubAPIDemo
 Demonstration scripts and notebooks showing how to use the Data Hub API for data submissions, reporting, and other tasks.
 
-**Note:** All of these scripts will require a Data Hub API key in order to use.  Instructions for obtaining an API token can be found in the [data submission documentation](https://datacommons.cancer.gov/data-submission-instructions)
+**Note:** All of these scripts will require a Data Hub API key in order to use.  Instructions for obtaining an API token can be found in the [data submission documentation](https://datacommons.cancer.gov/data-submission-instructions).  For security reasons, these tokens should be stored as environment variables on your system.  The scripts expect production and stage API keys to be stored in the environment variables PRODAPI and STAGEAPI, respectively.
 
 ## DataHubAPIDemo.ipynb
 This Jupyter notebooks walks through a basic example of how to do a CRDC submission using the Data Hub APIs.
@@ -23,7 +23,10 @@ This notebook covers several queries that can provide more detailed information 
 - Retrieving a populated configuration file for use in uploading data files with the CLI Upload Tool
 
 ## SubmissionReportDashboard.py
-This is a Python Dash application that uses the APIs to create a personal dashboard of your submissions.
+This is a Python Dash application that uses the APIs to create a personal dashboard of your submissions.  To use this script, run the script (# python3 SubmissionReportDashboard.py), then launch a browser and navigate to http://localhost:8050.
+
+**Required Python Libraries**
+dash, dash_bootstrap_components, plotly, requests, pandas, datetime, pytz
 
 
 ## ShinyDashboard.py
@@ -31,4 +34,16 @@ Simialr to the SubmissionReportDashboard only uses Python Shiny instead of Dash.
 
 
 ## WarningAggregator.ipynb and WarningAggregator.py
-Submissions that are inactive for extended periods of time start generating warning emails and after 180 days get deleted.  The remedy to this situation is to log into the Submission Portal and look at the submission.  However, this gets burdensome if there are a large number of submissions to check.  This script (also in notebook form) will query for all the submissions that are either New or In Progress and will request information from each of them.  This re-sets the inatvitiy timer.  
+  
+
+
+## SubmissionReset.py
+This script resets the inactivity timer for all of your **New** or **In Progress submissions** to the current date.
+
+## SubmissionResetGUI.py
+This is a graphical version (Python Dash) of the *SubmissionReset.py* script.  Select a tier from the drop-down and a table of your current New and In Progress submissions will be generated.  Select the submissions you wish to reset the inactivity timer on and then click on the *Reset Time on Selected Submissions* button below the table.  Each submission selected will be reset to the current date.
+
+To use, run the script ($ python3 SubmissionResetGUI.py) and then bring up a browser and navigate to http://localhost:8050.
+
+**Required Python Libraries**
+dash, dash_bootstrap_components, requests, pandas, datetime, pytz
