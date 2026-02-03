@@ -4,26 +4,36 @@ import argparse
 import requests
 import pandas as pd
 
-def apiQuery(tier, query, variables):
+def apiQuery(tier, query, variables, verbose=0):
     if tier == 'prod':
         url = 'https://hub.datacommons.cancer.gov/api/graphql'
         token = os.environ['PRODAPI']
+        if verbose >= 2:
+            print(f"Running query on prod:\n{query}\n")
     elif tier == 'stage':
         #Note that use of Stage is for example purposes only, actual submissions should use the production URL.  If you wish to run tests on Stage, please contact the helpdesk.
         url = 'https://hub-stage.datacommons.cancer.gov/api/graphql'
         token = os.environ['STAGEAPI']
+        if verbose >= 2:
+            print(f"Running query on stage:\n{query}\n")
     else:
         return('Please provide either "stage" or "prod" as tier values')
     headers = {"Authorization": f"Bearer {token}"}
+    if verbose >= 3:
+        print(f"Headers:\n{headers}")
     try:
         if variables is None:
             result = requests.post(url = url, headers = headers, json={"query": query})
         else:
             result = requests.post(url = url, headers = headers, json = {"query":query, "variables":variables})
         if result.status_code == 200:
+            if verbose >= 3:
+                print(f"Query result:\n{result.json}")
             return result.json()
         else:
             print(f"Error: {result.status_code}")
+            if verbose >= 3:
+                print(result.content)
             return result.content
     except requests.exceptions.HTTPError as e:
         return(f"HTTP Error: {e}")
@@ -66,6 +76,8 @@ def main(args):
     if args.verbose >= 1:
         print("Getting list of New and In Progress Submissions")
     subres = apiQuery(args.tier.lower(), list_sub_query, list_sub_vars)
+    if args.verbose >= 3:
+        print(f"Result from API query:\n{subres}")
     sub_df = pd.DataFrame(subres['data']['listSubmissions']['submissions'])
     if args.verbose >= 2:
         print("Submissions to be updated")
@@ -90,7 +102,9 @@ def main(args):
             reslist = []
     for submissionid in sublist:
         checkvars = {"id": submissionid}
-        res = apiQuery(args.tier.lower(), getSubmissionQuery, checkvars)
+        if args.verbose >= 2:
+            print(f"Updating submission:\t {checkvars}")
+        res = apiQuery(args.tier.lower(), getSubmissionQuery, checkvars, args.verbose)
         if args.verbose >= 2:
             reslist.append(res['data']['getSubmission'])
     if args.verbose >= 2:
