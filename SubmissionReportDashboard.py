@@ -35,7 +35,7 @@ app = dash.Dash(
     prevent_initial_callbacks=True,
     update_title="Updating..."
 )
-app.title ="DH Dashboard"
+app.title ="Submission Dashboard"
 
 
 
@@ -115,6 +115,26 @@ def updateAggregation(df):
     if len(filelist) > 0:
         agg_df.loc[len(agg_df)] = {'title': 'Updating existing data', 'description': 'File update', 'count': len(filelist)}
     return agg_df
+
+
+def updateSubmissionClock(subid, tier):
+    getSubmissionQuery = """
+        query GetSubmissions(
+            $id: ID!    
+        ){
+            getSubmission(_id:$id){
+                _id
+                name
+                dataCommons
+            }
+        }
+
+    """
+    vars = {"id": subid}
+    updatejson = apiQuery(tier, getSubmissionQuery, vars, False)
+    return updatejson
+
+
 
 ############################################
 #                                          #
@@ -242,7 +262,7 @@ sidebar = html.Div(
 
 tableheader = html.Div([
     html.Hr(),
-    html.H2("Study Information", id='studytabletitle'),
+    html.H2("Submissions for Study: Select a tier and study from the dropdowns", id='studytabletitle'),
     html.Hr()
 ],
     style=CONTENT_STYLE)
@@ -367,7 +387,13 @@ batchcontent = html.Div(
     ]
 )
 
-content = html.Div(id="page-content", style=CONTENT_STYLE)
+content = html.Div([
+    html.Div(id='page-content', style=CONTENT_STYLE),
+    dcc.Store(id='selectedsubmissionstore')
+])
+
+updateButton = html.Button('Reset Time on Selected Submissions', id='updatethis', n_clicks=0, style=CONTENT_STYLE)
+
 errorcontent = html.Div(
     [
         html.Div(dbc.Spinner(html.Div(id="errorcontentspinner"), color="primary")),
@@ -402,7 +428,7 @@ app.layout = html.Div([sidebar,
                                        style = TAB_STYLE,
                                        selected_style = SELECTED_TAB_STYLE,
                                        children=[
-                                           tableheader, content, barcharts, errorpie, errorsummary
+                                           tableheader, content, updateButton, barcharts, errorpie, errorsummary
                                        ],
                                ),
                                dcc.Tab(
@@ -460,7 +486,7 @@ def populateStudyStore(tierselector):
 
 
 @app.callback(
-    Output('submissionstore', 'data'),
+    Output('submissionstore', 'data', allow_duplicate=True),
     Input(component_id='studystore', component_property='data'),
     State(component_id='studyselector', component_property='value'),
     State(component_id='tierselector', component_property='value'),
@@ -472,6 +498,17 @@ def populateSubmissionStore(studystore, studyselector, tierselector):
     #Create the elapsedTime column
     sub_df = elapsedTime(sub_df) 
     return sub_df.reset_index().to_json(orient='split')
+
+
+@app.callback(
+        Output('selectedsubmissionstore', 'data', allow_duplicate=True),
+        Input(component_id='studyselector', component_property='value'),
+        State(component_id='submissionstore', component_property='data')
+)
+def populateSelectedSubmissionStore(studyselector, submissionstore):
+    sub_df = pd.read_json(io.StringIO(submissionstore),orient='split')
+    table_df = sub_df.loc[sub_df['studyAbbreviation'] == studyselector]
+    return table_df.reset_index().to_json(orient='split')
 
 
 ###################### Spinner Callbacks ##################################
@@ -516,7 +553,10 @@ def errorDetailSpinner(value):
     Input(component_id='studyselector', component_property='value')
 )
 def changeStudyTableTitle(studyselector):
-    return f"Study Information: {studyselector}"
+    if studyselector == None:
+        return "Submissions for Study: None"
+    else:
+        return f"Submissions for Study: {studyselector}"
 
 
 @app.callback(
@@ -524,7 +564,10 @@ def changeStudyTableTitle(studyselector):
     Input(component_id='subselector', component_property='value')
 )
 def changeSubmissionStatusPlotTitle(subselector):
-    return f"Submission Status by Count: {subselector}"
+    if subselector == None:
+        return "Submission Status by Count"
+    else:
+        return f"Submission Status by Count: {subselector}"
 
 
 @app.callback(
@@ -532,7 +575,10 @@ def changeSubmissionStatusPlotTitle(subselector):
     Input(component_id='subselector', component_property='value')
 )
 def changeSubmissionStatusPercentageTitle(subselector):
-    return f"Submission Status by Percentage: {subselector}"
+    if subselector == None:
+        return "Submission Status by Percentage"
+    else:
+        return f"Submission Status by Percentage: {subselector}"
 
 
 @app.callback(
@@ -540,7 +586,10 @@ def changeSubmissionStatusPercentageTitle(subselector):
     Input(component_id='subselector', component_property='value')
 )
 def changeValidationErrorPieTitle(subselector):
-    return f"Validation Errors: {subselector}"
+    if subselector == None:
+        return "Validation Errors"
+    else:
+        return f"Validation Errors: {subselector}"
 
 
 @app.callback(
@@ -548,7 +597,10 @@ def changeValidationErrorPieTitle(subselector):
     Input(component_id='subselector', component_property='value')
 )
 def changeValidationWarningPieTitle(subselector):
-    return f"Validation Warnings: {subselector}"
+    if subselector == None:
+        return("Validation Warnings")
+    else:
+        return f"Validation Warnings: {subselector}"
 
 
 @app.callback(
@@ -558,7 +610,10 @@ def changeValidationWarningPieTitle(subselector):
     State(component_id="subselector", component_property="value")
 )
 def errorTableTitle(errorselector, studyselector, subselector):
-    return ("Error and Warning Details:",html.Br(),"Study: "+studyselector,html.Br(),"Submission: "+subselector, html.Br(), "Errors: "+errorselector)
+    if errorselector == None:
+        return("Error and Warning Details:")
+    else:
+        return ("Error and Warning Details:",html.Br(),"Study: "+studyselector,html.Br(),"Submission: "+subselector, html.Br(), "Errors: "+errorselector)
 
 
 @app.callback(
@@ -568,14 +623,20 @@ def errorTableTitle(errorselector, studyselector, subselector):
     State(component_id="subselector", component_property="value")
 )
 def errorTableTitle(dataselector, studyselector, subselector):
-    return ("Submitted Data:",html.Br(),"Study: "+studyselector,html.Br(),"Submission: "+subselector, html.Br(), "Node: "+dataselector)
+    if dataselector == None:
+        return ("Submitted Data:")
+    else:
+        return ("Submitted Data:",html.Br(),"Study: "+studyselector,html.Br(),"Submission: "+subselector, html.Br(), "Node: "+dataselector)
 
 @app.callback(
     Output("batchtitle", "children"),
     Input(component_id="subselector", component_property="value")
 )
 def batchTableTitle(subselector):
-    return(f"Batch History for Submission: {subselector}")
+    if subselector == None:
+        return ("Batch History for Submission")
+    else:
+        return(f"Batch History for Submission: {subselector}")
 
 
 
@@ -621,7 +682,7 @@ def populateErrorSelector(subselector, submissionstore, tierselector):
     if len(idlist)>=1:
         queryvars = {"submissionID":idlist[0], "severity":"All", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
         selector_res = apiQuery(tierselector, dhq.summaryQuery, queryvars)
-        if selector_res['data']['aggregatedSubmissionQCResults']['total'] == None:
+        if selector_res['data']['aggregatedSubmissionQCResults']['total'] == 0:
             return []
         else:
             val_df = pd.DataFrame(selector_res['data']['aggregatedSubmissionQCResults']['results'])
@@ -654,19 +715,44 @@ def populateNodeSelector(subselector, submissionstore, tierselector):
 
 ####################### Table callbacks##########################################
 
+@app.callback(
+        Output('submissionstore', 'data', allow_duplicate=True),
+        Output('selectedsubmissionstore', 'data', allow_duplicate=True),
+        Input(component_id='updatethis', component_property='n_clicks'),
+        State(component_id='tierselector', component_property='value'),
+        State(component_id='selectedsubmissionstore', component_property='data'),
+        State(component_id='selectedstudytable', component_property='selected_rows'),
+        State(component_id='submissionstore', component_property='data'),
+        State(component_id='studyselector', component_property='value')
+)
+def updateInactiveTime(n_clicks, tierselector, selectedsubmissionstore, selected_rows, submissionstore, studyselector):
+    if n_clicks >= 0:
+        sub_df = pd.read_json(io.StringIO(selectedsubmissionstore), orient='split')
+        selected_df = sub_df.iloc[selected_rows]
+        for index, row in selected_df.iterrows():
+            res = updateSubmissionClock(row['_id'], tierselector)
+          
+        subjson = apiQuery(tierselector, dhq.list_sub_query, {"status":["All"]})
+        sub_df = pd.DataFrame(subjson['data']['listSubmissions']['submissions'])
+        #Create the elapsedTime column
+        sub_df = elapsedTime(sub_df) 
+        table_df = sub_df.loc[sub_df['studyAbbreviation'] == studyselector]
+        return sub_df.reset_index().to_json(orient='split'), table_df.reset_index().to_json(orient='split')
+
+
 
 
 @app.callback(
-    Output("page-content", "children"),
-    Input(component_id='studyselector', component_property='value'),
-    State(component_id='submissionstore', component_property='data'),
+        Output("page-content", "children"),
+        Input(component_id='selectedsubmissionstore', component_property='modified_timestamp'),
+        State(component_id='selectedsubmissionstore', component_property='data')
 )
-def populateStudyInfoTable(studyselector, submissionstore):
-    sub_df = pd.read_json(io.StringIO(submissionstore),orient='split')
-    table_df = sub_df.loc[sub_df['studyAbbreviation'] == studyselector]
-    data=table_df.to_dict('records')
-    columns=[{"name":e, "id":e} for e in (table_df.columns)]
-    return dash_table.DataTable(data=data, 
+def populateStudyInfoTable(modified_timestamp, selectedsubmissionstore):
+    sub_df = pd.read_json(io.StringIO(selectedsubmissionstore),orient='split')
+    data=sub_df.to_dict('records')
+    columns=[{"name":e, "id":e} for e in (sub_df.columns)]
+    return dash_table.DataTable(id='selectedstudytable',
+                                data=data, 
                                 columns=columns, 
                                 style_table={'overflowX':'auto'},
                                 style_cell={'overflow':'hidden', 'textOverflow':'ellipsis', 'maxWidth':10, 'textAlign':'center'},
@@ -676,11 +762,14 @@ def populateStudyInfoTable(studyselector, submissionstore):
                                                         {'if':{'filter_query':'{inactiveDays} >= 46 && {inactiveDays} <=59', 'column_id':'inactiveDays'}, 'backgroundColor':'yellow', 'color':'black'},
                                                         {'if':{'filter_query':'{inactiveDays} >= 60', 'column_id':'inactiveDays'}, 'backgroundColor':'red', 'color':'white'}],
                                 style_header={'backgroundColor': 'rgb(210,210,210)', 'color':'black', 'fontWeight':'bold', 'textAlign':'center'},
+                                row_selectable="multi",
+                                sort_action='native',
+                                sort_mode='multi',
                                 tooltip_data=[
                                     {
                                         column:{'value': str(value), 'type':'markdown'}
                                         for column, value in row.items()
-                                    } for row in table_df.to_dict('records')
+                                    } for row in sub_df.to_dict('records')
                                 ],
                                 tooltip_duration=None,
                                 export_format="csv"
@@ -698,34 +787,31 @@ def populateStudyInfoTable(studyselector, submissionstore):
 def populateDataTable(dataselector, submissionstore, subselector, tierselector):
     sub_df = pd.read_json(io.StringIO(submissionstore),orient='split')
     idlist = sub_df.query("name == @subselector")['_id'].tolist()
-    if len(idlist) >= 1:
-        queryvars = {'_id':idlist[0], 'nodeType':dataselector, 'status':'All', 'first':-1, 'offset':0, 'orderBy':'studyID', 'sortDirection':'desc'}
-        data_res = apiQuery(tierselector, dhq.submission_nodes_query, queryvars)
-        if data_res['data']['getSubmissionNodes']['total'] == None:
-            return {}
-        else:
-            data_df = pd.DataFrame(columns=data_res['data']['getSubmissionNodes']['properties'])
-            for entry in data_res['data']['getSubmissionNodes']['nodes']:
-                data_df.loc[len(data_df)] = json.loads(entry['props'])
-            return dash_table.DataTable(
-                data=data_df.to_dict('records'),
-                columns=[{"name": e, "id": e} for e in (data_df.columns)],
-                style_table={'overflowX':'auto'},
-                style_cell={'overflow':'hidden', 'textOverflow':'ellipsis', 'maxWidth':10, 'textAlign':'center'},
-                style_data={'color':'black', 'backgroundColor':'white'},
-                style_data_conditional=[{'if':{'row_index':'odd'}, 'backgroundColor': 'rgb(220,220,220)'}],
-                style_header={'backgroundColor': 'rgb(210,210,210)', 'color':'black', 'fontWeight':'bold', 'textAlign':'center'},
-                tooltip_data=[
-                    {
-                        column:{'value': str(value), 'type':'markdown'}
-                        for column, value in row.items()
-                    } for row in data_df.to_dict('records')
-                ],
-                tooltip_duration=None,
-                export_format="csv"
-            )
+    queryvars = {'_id':idlist[0], 'nodeType':dataselector, 'status':'All', 'first':-1, 'offset':0, 'orderBy':'studyID', 'sortDirection':'desc'}
+    data_res = apiQuery(tierselector, dhq.submission_nodes_query, queryvars)
+    if data_res['data']['getSubmissionNodes']['total'] == 0:
+        return dash_table.DataTable()
     else:
-        return {}
+        data_df = pd.DataFrame(columns=data_res['data']['getSubmissionNodes']['properties'])
+        for entry in data_res['data']['getSubmissionNodes']['nodes']:
+            data_df.loc[len(data_df)] = json.loads(entry['props'])
+        return dash_table.DataTable(
+            data=data_df.to_dict('records'),
+            columns=[{"name": e, "id": e} for e in (data_df.columns)],
+            style_table={'overflowX':'auto'},
+            style_cell={'overflow':'hidden', 'textOverflow':'ellipsis', 'maxWidth':10, 'textAlign':'center'},
+            style_data={'color':'black', 'backgroundColor':'white'},
+            style_data_conditional=[{'if':{'row_index':'odd'}, 'backgroundColor': 'rgb(220,220,220)'}],
+            style_header={'backgroundColor': 'rgb(210,210,210)', 'color':'black', 'fontWeight':'bold', 'textAlign':'center'},
+            tooltip_data=[
+                {
+                    column:{'value': str(value), 'type':'markdown'}
+                    for column, value in row.items()
+                } for row in data_df.to_dict('records')
+            ],
+            tooltip_duration=None,
+            export_format="csv"
+        )
 
 
 
@@ -743,9 +829,8 @@ def errorDetailTable(errorselector, submissionstore, subselector, tierselector):
         subvars = {"submissionID":idlist[0], "severity":"All", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
         sub_res = apiQuery(tierselector, dhq.summaryQuery, subvars)
         if sub_res['data']['aggregatedSubmissionQCResults']['total'] == None:
-            return {}
+            return dash_table.DataTable()
         else:   
-            #table_df = pd.DataFrame(sub_res['data']['aggregatedSubmissionQCResults']['results'])
             errorvars = {"id": idlist[0], "severities":"All", "first": -1, "offset": 0, "orderBy":"displayID", "sortDirection":"desc"}
             detail_res = apiQuery(tierselector, dhq.detailedQCQuery, errorvars)
             columns = ['type', 'title', 'description']
@@ -779,7 +864,7 @@ def errorDetailTable(errorselector, submissionstore, subselector, tierselector):
                 export_format="csv"
             )
     else:
-        return {}
+        return dash_table.DataTable()
 
 
 @app.callback(
@@ -794,8 +879,8 @@ def populateBatchTable(subselector, submissionstore, tierselector):
     if len(idlist)>=1:
         queryvars = {"submissionID":idlist[0], "orderBy":"createdAt", "sortDirection":"DESC"}
         batch_res = apiQuery(tierselector, dhq.list_batch_query, queryvars)
-        if batch_res['data']['listBatches']['total'] == None:
-            return {}
+        if batch_res['data']['listBatches']['total'] == 0:
+            return dash_table.DataTable()
         else:
             batch_df = pd.DataFrame(columns=list(batch_res['data']['listBatches']['batches'][0].keys()))
             for batch in batch_res['data']['listBatches']['batches']:
@@ -820,7 +905,7 @@ def populateBatchTable(subselector, submissionstore, tierselector):
                 tooltip_duration=None,
                 export_format="csv")
     else:
-        return {}
+        return dash_table.DataTable()
 
 
 @app.callback(
@@ -835,8 +920,8 @@ def validationErrorSummaryTable(subselector, submissionstore, tierselector):
     if len(idlist) >= 1:
         subvars = {"submissionID":idlist[0], "severity":"All", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
         sub_res = apiQuery(tierselector, dhq.summaryQuery, subvars)
-        if sub_res['data']['aggregatedSubmissionQCResults']['total'] == None:
-            return {}
+        if sub_res['data']['aggregatedSubmissionQCResults']['total'] == 0:
+            return dash_table.DataTable()
         else:
             columns = ['type', 'title', 'description']
             error_df = pd.DataFrame(columns=columns)
@@ -865,7 +950,7 @@ def validationErrorSummaryTable(subselector, submissionstore, tierselector):
                 export_format="csv"
             )
     else:
-        return {}
+        return dash_table.DataTable()
 
 
 
@@ -881,8 +966,8 @@ def validationWarningSummaryTable(subselector, submissionstore, tierselector):
     if len(idlist) >= 1:
         subvars = {"submissionID":idlist[0], "severity":"All", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
         sub_res = apiQuery(tierselector, dhq.summaryQuery, subvars)
-        if sub_res['data']['aggregatedSubmissionQCResults']['total'] == None:
-            return {}
+        if sub_res['data']['aggregatedSubmissionQCResults']['total'] == 0:
+            return dash_table.DataTable()
         else:
             columns = ['type', 'title', 'description']
             error_df = pd.DataFrame(columns=columns)
@@ -913,7 +998,7 @@ def validationWarningSummaryTable(subselector, submissionstore, tierselector):
                 export_format="csv"
             )
     else:
-        return {}
+        return dash_table.DataTable()
             
 ############################## Graph Callbacks###################################
 
@@ -931,13 +1016,13 @@ def validationErrorPieChart(subselector, submissionstore, tierselector):
     if len(idlist)>=1:
         valvars = {"submissionID":idlist[0], "severity":"Error", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
         val_res = apiQuery(tierselector, dhq.summaryQuery, valvars)
-        if val_res['data']['aggregatedSubmissionQCResults']['total'] == None:
-            return {}
+        if val_res['data']['aggregatedSubmissionQCResults']['total'] == 0:
+            return  px.pie()
         else:
             val_df = pd.DataFrame(val_res['data']['aggregatedSubmissionQCResults']['results'])
             return px.pie(val_df, values='count', names='title', hole=.3)
     else:
-        return {}
+        return px.pie()
 
 
 
@@ -953,13 +1038,13 @@ def validationWarningPieChart(subselector, submissionstore, tierselector):
     if len(idlist)>=1:
         valvars = {"submissionID":idlist[0], "severity":"Warning", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
         val_res = apiQuery(tierselector, dhq.summaryQuery, valvars)
-        if val_res['data']['aggregatedSubmissionQCResults']['total'] == None:
-            return {}
+        if val_res['data']['aggregatedSubmissionQCResults']['total'] == 0:
+            return  px.pie()
         else:
             val_df = pd.DataFrame(val_res['data']['aggregatedSubmissionQCResults']['results'])
             return px.pie(val_df, values='count', names='title', hole=.3)
     else:
-        return {}
+        return px.pie()
 
 
 
@@ -981,7 +1066,7 @@ def subStatusChart(subselector, submissionstore, tierselector):
             substats_df.loc[len(substats_df)] = entry
         return px.bar(substats_df, x='nodeName', y=['new', 'error', 'warning', 'passed'])
     else:
-        return {}
+        return px.bar()
 
 
 
@@ -1017,7 +1102,7 @@ def subStatusPercentageChart(subselector, submissionstore, tierselector):
 
         return px.bar(per_df, x='nodeName', y=['new_percentage', 'error_percentage', 'warning_percentage', 'passed_percentage'])
     else:
-        return {}
+        return px.bar()
 
     
 
