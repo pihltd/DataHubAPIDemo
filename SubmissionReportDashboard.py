@@ -828,7 +828,7 @@ def errorDetailTable(errorselector, submissionstore, subselector, tierselector):
     if len(idlist)>=1:
         subvars = {"submissionID":idlist[0], "severity":"All", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
         sub_res = apiQuery(tierselector, dhq.summaryQuery, subvars)
-        if sub_res['data']['aggregatedSubmissionQCResults']['total'] == None:
+        if sub_res['data']['aggregatedSubmissionQCResults']['total'] == 0:
             return dash_table.DataTable()
         else:   
             errorvars = {"id": idlist[0], "severities":"All", "first": -1, "offset": 0, "orderBy":"displayID", "sortDirection":"desc"}
