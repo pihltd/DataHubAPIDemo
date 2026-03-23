@@ -249,8 +249,12 @@ app.layout = html.Div([
 )
 def updateSubstore(tierselector):
     subjson = getSubmissionData(tierselector)
-    sub_df = pd.DataFrame(subjson['data']['listSubmissions']['submissions'])
-    sub_df = elapsedTime(sub_df) 
+    if 'Status Code:' in subjson:
+        print(f"Invalid Response from API:\n{subjson}")
+        sub_df = None
+    else:
+        sub_df = pd.DataFrame(subjson['data']['listSubmissions']['submissions'])
+        sub_df = elapsedTime(sub_df) 
 
     return sub_df.reset_index().to_json(orient='split')
 ################### Table callbacks #################
