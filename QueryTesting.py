@@ -37,16 +37,18 @@ def apiQuery(tier, query, variables, queryprint = False):
         return(f"HTTP Error: {e}")
 
 #Get a list of projects and put in df
-TIER = 'STAGE'
-studyjson = apiQuery(TIER, dhq.org_query, None)
+#TIER = 'STAGE'
+TIER = 'PROD'
+#studyjson = apiQuery(TIER, dhq.org_query, None)
+studyjson = apiQuery(TIER, dhq.study_query, None)
 study_df = pd.DataFrame(studyjson['data']['getMyUser']['studies'])
-print(study_df.head())
+print(f"GetMyUser results from {TIER}:\n{study_df}")
 
 queryterm = '4f1a7385-bda6-4c07-abd0-49e21ec3c1ce'
 
 subjson = apiQuery(TIER, dhq.list_sub_query, {"status":["All"]})
 sub_df = pd.DataFrame(subjson['data']['listSubmissions']['submissions'])
-print(sub_df.head)
+print(f"ListSubmission results from {TIER}:\n{sub_df}")
 
-working_df = sub_df.loc[sub_df['studyID'] == queryterm]
-print(working_df.head)
+#working_df = sub_df.loc[sub_df['studyID'] == queryterm]
+#print(working_df.head)

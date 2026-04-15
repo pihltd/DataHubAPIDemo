@@ -18,6 +18,7 @@ query ListSubmissions($status: [String]){
   listSubmissions(status: $status){
     submissions{
       _id
+      accessedAt
       name
       submitterID
       submitterName
@@ -252,4 +253,28 @@ query ListBatches(
   }
 }
 """
-
+'''study_query = """
+{
+  getMyUser {
+    userStatus
+    studies {
+      _id
+      controlledAccess
+      createdAt
+      dbGaPID
+      studyName
+      studyAbbreviation
+    }
+  }
+}"""
+'''
+study_query = """
+{
+  getMyUser{
+    _id
+    studies{
+      _id
+    }
+  }
+}
+"""
