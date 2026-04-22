@@ -110,7 +110,7 @@ def getSubmissionData(tier):
                 studyID
                 dbGaPID
                 createdAt
-                updatedAt
+                accessedAt
                 metadataValidationStatus
                 fileValidationStatus
                 status
@@ -127,7 +127,7 @@ def getSubmissionData(tier):
 def elapsedTime(submission_df):
     days = []
     for index, row in submission_df.iterrows():
-        temp = row['updatedAt'].split('T')
+        temp = row['accessedAt'].split('T')
         update = datetime.strptime(temp[0], '%Y-%m-%d')
         update = update.replace(tzinfo=tz('UTC'))
         now = datetime.now(timezone.utc)
@@ -146,6 +146,7 @@ def updateSubmissionClock(subid, tier):
                 _id
                 name
                 dataCommons
+                accessedAt
             }
         }
 
@@ -305,7 +306,7 @@ def updateSubmissions(n_clicks,selected_rows, substore, tierselector):
         selected_df = sub_df.iloc[selected_rows]
         collected_res = []
         for index, row in selected_df.iterrows():
-            print(row['_id'])
+            #print(row['_id'])
             res = updateSubmissionClock(row['_id'], tierselector)
             collected_res.append({row['name']: res})
         

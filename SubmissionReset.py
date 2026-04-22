@@ -98,8 +98,8 @@ def main(args):
     """
     if args.verbose >= 1:
         print("Updating all New and In Progress submissions")
-    if args.verbose >= 2:
-            reslist = []
+    #if args.verbose >= 2:
+    reslist = []
     for submissionid in sublist:
         checkvars = {"id": submissionid}
         if args.verbose >= 2:

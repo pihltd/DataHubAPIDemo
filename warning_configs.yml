@@ -1,9 +1,7 @@
 subid: 
-  - 'c0ceb350-9318-4a48-875a-dd956a73e211'
+  - '28de651c-cb48-464f-bff6-01d00dd56eab'
 severity: 'All'
 nodelist: 
-  - 'genomic_info'
-  - 'image'
-  - 'proteomic'
+  - 'study'
 outputdirectory: '/media/sf_VMShare/WarningSummary/'
-tier: 'stage'
+tier: 'prod'

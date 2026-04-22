@@ -135,6 +135,27 @@ def updateSubmissionClock(subid, tier):
     return updatejson
 
 
+def buildBasicTable(df):
+
+    return dash_table.DataTable(
+            data=df.to_dict('records'),
+            columns=[{"name": e, "id": e} for e in (df.columns)],
+            style_table={'overflowX':'auto'},
+            style_cell={'overflow':'hidden', 'textOverflow':'ellipsis', 'maxWidth':10, 'textAlign':'center'},
+            style_data={'color':'black', 'backgroundColor':'white'},
+            style_data_conditional=[{'if':{'row_index':'odd'}, 'backgroundColor': 'rgb(220,220,220)'}],
+            style_header={'backgroundColor': 'rgb(210,210,210)', 'color':'black', 'fontWeight':'bold', 'textAlign':'center'},
+            tooltip_data=[
+                {
+                    column:{'value': str(value), 'type':'markdown'}
+                    for column, value in row.items()
+                } for row in df.to_dict('records')
+            ],
+            tooltip_duration=None,
+            export_format="csv"
+        )
+
+
 
 ############################################
 #                                          #
@@ -795,23 +816,7 @@ def populateDataTable(dataselector, submissionstore, subselector, tierselector):
         data_df = pd.DataFrame(columns=data_res['data']['getSubmissionNodes']['properties'])
         for entry in data_res['data']['getSubmissionNodes']['nodes']:
             data_df.loc[len(data_df)] = json.loads(entry['props'])
-        return dash_table.DataTable(
-            data=data_df.to_dict('records'),
-            columns=[{"name": e, "id": e} for e in (data_df.columns)],
-            style_table={'overflowX':'auto'},
-            style_cell={'overflow':'hidden', 'textOverflow':'ellipsis', 'maxWidth':10, 'textAlign':'center'},
-            style_data={'color':'black', 'backgroundColor':'white'},
-            style_data_conditional=[{'if':{'row_index':'odd'}, 'backgroundColor': 'rgb(220,220,220)'}],
-            style_header={'backgroundColor': 'rgb(210,210,210)', 'color':'black', 'fontWeight':'bold', 'textAlign':'center'},
-            tooltip_data=[
-                {
-                    column:{'value': str(value), 'type':'markdown'}
-                    for column, value in row.items()
-                } for row in data_df.to_dict('records')
-            ],
-            tooltip_duration=None,
-            export_format="csv"
-        )
+        return buildBasicTable(data_df)
 
 
 
@@ -846,23 +851,7 @@ def errorDetailTable(errorselector, submissionstore, subselector, tierselector):
                     if warning['title'] == errorselector:
                         warning['type'] = 'Warning'
                         error_df.loc[len(error_df)] = warning
-            return dash_table.DataTable(
-                data=error_df.to_dict('records'),
-                columns=[{"name":e, "id":e} for e in (error_df.columns)],
-                style_table={'overflowX':'auto'},
-                style_cell={'overflow':'hidden', 'textOverflow':'ellipsis', 'maxWidth':10, 'textAlign':'center'},
-                style_data={'color':'black', 'backgroundColor':'white'},
-                style_data_conditional=[{'if':{'row_index':'odd'}, 'backgroundColor': 'rgb(220,220,220)'}],
-                style_header={'backgroundColor': 'rgb(210,210,210)', 'color':'black', 'fontWeight':'bold', 'textAlign':'center'},
-                tooltip_data=[
-                    {
-                        column:{'value': str(value), 'type':'markdown'}
-                        for column, value in row.items()
-                    } for row in error_df.to_dict('records')
-                ],
-                tooltip_duration=None,
-                export_format="csv"
-            )
+                return buildBasicTable(error_df)
     else:
         return dash_table.DataTable()
 
@@ -888,22 +877,7 @@ def populateBatchTable(subselector, submissionstore, tierselector):
             #Need to covert errors and files to string otherwise it borks the table
             batch_df['errors'] = batch_df['errors'].astype(str)
             batch_df['files'] = batch_df['files'].astype(str)
-            return dash_table.DataTable(
-                data=batch_df.to_dict('records'),
-                columns=[{"name":e, "id":e} for e in batch_df.columns],
-                style_table={'overflowX':'auto'},
-                style_cell={'overflow':'hidden', 'textOverflow':'ellipsis', 'maxWidth':10, 'textAlign':'center'},
-                style_data={'color':'black', 'backgroundColor':'white'},
-                style_data_conditional=[{'if':{'row_index':'odd'}, 'backgroundColor': 'rgb(220,220,220)'}],
-                style_header={'backgroundColor': 'rgb(210,210,210)', 'color':'black', 'fontWeight':'bold', 'textAlign':'center'},
-                tooltip_data=[
-                    {
-                        column:{'value': str(value), 'type':'markdown'}
-                        for column, value in row.items()
-                    } for row in batch_df.to_dict('records')
-                ],
-                tooltip_duration=None,
-                export_format="csv")
+            return buildBasicTable(batch_df)
     else:
         return dash_table.DataTable()
 
@@ -932,23 +906,7 @@ def validationErrorSummaryTable(subselector, submissionstore, tierselector):
                     message = bracketParse(error['description'])
                     error_df.loc[len(error_df)] = {'type':'Error', 'title':error['title'], 'description':message}
             summary_df = error_df.groupby(['title', 'description']).size().reset_index().rename(columns={0:'count'}).sort_values(by='count', ascending=False)
-            return dash_table.DataTable(
-                data=summary_df.to_dict('records'),
-                columns=[{"name":e, "id":e} for e in summary_df.columns],
-                style_table={'overflowX':'auto'},
-                style_cell={'overflow':'hidden', 'textOverflow':'ellipsis', 'maxWidth':10, 'textAlign':'center'},
-                style_data={'color':'black', 'backgroundColor':'white'},
-                style_data_conditional=[{'if':{'row_index':'odd'}, 'backgroundColor': 'rgb(220,220,220)'}],
-                style_header={'backgroundColor': 'rgb(210,210,210)', 'color':'black', 'fontWeight':'bold', 'textAlign':'center'},
-                tooltip_data=[
-                    {
-                        column:{'value': str(value), 'type':'markdown'}
-                        for column, value in row.items()
-                    } for row in summary_df.to_dict('records')
-                ],
-                tooltip_duration=None,
-                export_format="csv"
-            )
+            return buildBasicTable(summary_df)
     else:
         return dash_table.DataTable()
 
@@ -980,23 +938,7 @@ def validationWarningSummaryTable(subselector, submissionstore, tierselector):
             temp_df = error_df.groupby(['title', 'description']).size().reset_index().rename(columns={0:'count'}).sort_values(by='count', ascending=False)
             summary_df = updateAggregation(temp_df)
             summary_df = summary_df.sort_values(by='count', ascending=False)
-            return dash_table.DataTable(
-                data=summary_df.to_dict('records'),
-                columns=[{"name":e, "id":e} for e in summary_df.columns],
-                style_table={'overflowX':'auto'},
-                style_cell={'overflow':'hidden', 'textOverflow':'ellipsis', 'maxWidth':10, 'textAlign':'center'},
-                style_data={'color':'black', 'backgroundColor':'white'},
-                style_data_conditional=[{'if':{'row_index':'odd'}, 'backgroundColor': 'rgb(220,220,220)'}],
-                style_header={'backgroundColor': 'rgb(210,210,210)', 'color':'black', 'fontWeight':'bold', 'textAlign':'center'},
-                tooltip_data=[
-                    {
-                        column:{'value': str(value), 'type':'markdown'}
-                        for column, value in row.items()
-                    } for row in summary_df.to_dict('records')
-                ],
-                tooltip_duration=None,
-                export_format="csv"
-            )
+            return buildBasicTable(summary_df)
     else:
         return dash_table.DataTable()
             

@@ -11,21 +11,21 @@ query retrieveReleasedDataByID(
     $submissionID: String!,
     $nodeType: String!
     $nodeID: String!
-){
-retrieveReleasedDataByID(
-    submissionID: $submissionID,
-    nodeType: $nodeType
-    nodeID: $nodeID
-){
-    submissionID
-    status
-    dataCommons
-    dataCommonsDisplayName
-    studyID
-    nodeType
-    nodeID
-    props
-}
+    ){
+    retrieveReleasedDataByID(
+        submissionID: $submissionID,
+        nodeType: $nodeType
+        nodeID: $nodeID
+    ){
+        submissionID
+        status
+        dataCommons
+        dataCommonsDisplayName
+        studyID
+        nodeType
+        nodeID
+        props
+    }
 }
 """
 
@@ -38,40 +38,39 @@ query getSubmissionNodes(
     $offset:Int, 
     $orderBy: String, 
     $sortDirection:String
-) {
-getSubmissionNodes(
-    submissionID: $_id
-    nodeType: $nodeType
-    status: $status
-    first: $first
-    offset: $offset
-    orderBy: $orderBy
-    sortDirection: $sortDirection
-) {
-    total
-    IDPropName
-    properties
-    nodes {
-        nodeID
-        nodeType
-        status
-        props
-    }
-    }
+            ) {
+        getSubmissionNodes(
+            submissionID: $_id
+            nodeType: $nodeType
+            status: $status
+            first: $first
+            offset: $offset
+            orderBy: $orderBy
+            sortDirection: $sortDirection
+        ) {
+            total
+            IDPropName
+            properties
+            nodes {
+                nodeID
+                nodeType
+                status
+                props
+            }
+            }
 }
 """
 
 getSubmissionQuery = """
-        query GetSubmissions(
-            $id: ID!    
+    query GetSubmissions(
+        $id: ID!    
         ){
-            getSubmission(_id:$id){
-                _id
-                name
-                dataCommons
-            }
+        getSubmission(_id:$id){
+            _id
+            name
+            dataCommons
         }
-
+    }
     """
 
 def readYAML(yamlfile):
@@ -115,7 +114,14 @@ def diffDataFrame(subid, nodetype, nodeID, tier, query):
         return None
     else:
         for entry in diffres['data']['retrieveReleasedDataByID']:
-            propstuff = json.loads(entry['props'])
+            tempstuff = json.loads(entry['props'])
+            propstuff = {}
+            if entry['status'] == "Warning":
+                propstuff['EntryType'] = "New"
+            else:
+                propstuff['EntryType'] = 'Existing'
+            for key, value in tempstuff.items():
+                propstuff[key] = value
             temp_df = pd.DataFrame(propstuff, index=[entry['submissionID']])
             dfcollection[entry['submissionID']] = temp_df
             keylist = list(dfcollection.keys())
@@ -146,7 +152,7 @@ def main(args):
             for result in nodedata_res['data']['getSubmissionNodes']['nodes']:
                 nodetype = result['nodeType']
                 nodeid = result['nodeID']
-                report_df = diffDataFrame(subid, nodetype, nodeid, 'stage', error_query)
+                report_df = diffDataFrame(subid, nodetype, nodeid, configs['tier'], error_query)
                 if report_df is not None:
                     nodedlist.append(report_df)
                     report_df = pd.concat(nodedlist)
@@ -154,7 +160,7 @@ def main(args):
                     report_df['submission_state'] = np.where(report_df.index == subid, 'New', 'Existing')
                     col = report_df.pop('submission_state')
                     report_df.insert(0, 'submission_state', col)
-                    report_df.to_csv(f"{configs['outputdirectory']}{subid}_{node}_warning_diffs.csv", sep="\t")
+                    report_df.to_csv(f"{configs['outputdirectory']}{subid}_{node}_warning_diffs.csv", sep="\t", index=False)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
