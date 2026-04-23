@@ -45,9 +45,18 @@ app.title ="Submission Dashboard"
 #                                     #
 #######################################
 def apiQuery(tier, query, variables, queryprint = False):
-    if tier == 'DEV2':
+    if tier == 'DEV':
+        url = 'https://hub-dev.datacommons.cancer.gov/api/graphql'
+        token = os.environ['DEVAPI']
+    elif tier == 'DEV2':
         url = 'https://hub-dev2.datacommons.cancer.gov/api/graphql'
         token = os.environ['DEV2API']
+    elif tier == 'QA':
+        url = 'https://hub-qa.datacommons.cancer.gov/api/graphql'
+        token = os.environ['QAAPI']
+    elif tier == 'QA2':
+        url = 'https://hub-qa2.datacommons.cancer.gov/api/graphql'
+        token = os.environ['QA2API']
     elif tier == 'STAGE':
         url = 'https://hub-stage.datacommons.cancer.gov/api/graphql'
         token = os.environ['STAGEAPI']
@@ -93,13 +102,17 @@ def elapsedTime(submission_df):
 
 
 def bracketParse(parsethis):
-    first = parsethis.split("]")
-    errorstring = first[1]
-    if "[" in errorstring:
-        second = errorstring.split("[")
-        return second[0]
+    if ']' in parsethis:
+        first = parsethis.split("]")
+        print(f"Parsethis: {parsethis}\nFirst:{first}\n")
+        errorstring = first[1]
+        if "[" in errorstring:
+            second = errorstring.split("[")
+            return second[0]
+        else:
+            return errorstring
     else:
-        return errorstring
+        return parsethis
 
 
 def updateAggregation(df):
@@ -216,7 +229,7 @@ sidebar = html.Div(
                 html.Hr(),
                 dcc.Dropdown(
                     id = 'tierselector',
-                    options = ['DEV2','STAGE', 'PROD'],
+                    options = ['DEV','DEV2','QA','QA2','STAGE', 'PROD'],
                     multi = False,
                     style={'backgroundcolor':'1E1E1E'},
                 ),
@@ -810,13 +823,16 @@ def populateDataTable(dataselector, submissionstore, subselector, tierselector):
     idlist = sub_df.query("name == @subselector")['_id'].tolist()
     queryvars = {'_id':idlist[0], 'nodeType':dataselector, 'status':'All', 'first':-1, 'offset':0, 'orderBy':'studyID', 'sortDirection':'desc'}
     data_res = apiQuery(tierselector, dhq.submission_nodes_query, queryvars)
-    if data_res['data']['getSubmissionNodes']['total'] == 0:
-        return dash_table.DataTable()
+    if 'data' in data_res:
+        if data_res['data']['getSubmissionNodes']['total'] == 0:
+            return dash_table.DataTable()
+        else:
+            data_df = pd.DataFrame(columns=data_res['data']['getSubmissionNodes']['properties'])
+            for entry in data_res['data']['getSubmissionNodes']['nodes']:
+                data_df.loc[len(data_df)] = json.loads(entry['props'])
+            return buildBasicTable(data_df)
     else:
-        data_df = pd.DataFrame(columns=data_res['data']['getSubmissionNodes']['properties'])
-        for entry in data_res['data']['getSubmissionNodes']['nodes']:
-            data_df.loc[len(data_df)] = json.loads(entry['props'])
-        return buildBasicTable(data_df)
+        return dash_table.DataTable()
 
 
 
@@ -955,6 +971,7 @@ def validationWarningSummaryTable(subselector, submissionstore, tierselector):
 def validationErrorPieChart(subselector, submissionstore, tierselector):
     sub_df = pd.read_json(io.StringIO(submissionstore),orient='split')
     idlist = sub_df.query("name == @subselector")["_id"].tolist()
+    #colors = {'new':'blue', 'error': 'red', 'warning':'yellow', 'passed':'green'}
     if len(idlist)>=1:
         valvars = {"submissionID":idlist[0], "severity":"Error", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
         val_res = apiQuery(tierselector, dhq.summaryQuery, valvars)
@@ -977,6 +994,7 @@ def validationErrorPieChart(subselector, submissionstore, tierselector):
 def validationWarningPieChart(subselector, submissionstore, tierselector):
     sub_df = pd.read_json(io.StringIO(submissionstore),orient='split')
     idlist = sub_df.query("name == @subselector")["_id"].tolist()
+    #colors = {'new':'blue', 'error': 'red', 'warning':'yellow', 'passed':'green'}
     if len(idlist)>=1:
         valvars = {"submissionID":idlist[0], "severity":"Warning", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
         val_res = apiQuery(tierselector, dhq.summaryQuery, valvars)
@@ -999,6 +1017,7 @@ def validationWarningPieChart(subselector, submissionstore, tierselector):
 def subStatusChart(subselector, submissionstore, tierselector):
     sub_df = pd.read_json(io.StringIO(submissionstore),orient='split')
     idlist = sub_df.query("name == @subselector")["_id"].tolist()
+    colors = {'new':'blue', 'error': 'red', 'warning':'yellow', 'passed':'green'}
     if len(idlist) >= 1:
         qvars = {'id': idlist[0]}
         query_res = apiQuery(tierselector, dhq.submission_stats_query, qvars)
@@ -1006,7 +1025,7 @@ def subStatusChart(subselector, submissionstore, tierselector):
         substats_df = pd.DataFrame(columns=columns)
         for entry in query_res['data']['submissionStats']['stats']:
             substats_df.loc[len(substats_df)] = entry
-        return px.bar(substats_df, x='nodeName', y=['new', 'error', 'warning', 'passed'])
+        return px.bar(substats_df, x='nodeName', y=['new', 'error', 'warning', 'passed'], color_discrete_map=colors)
     else:
         return px.bar()
 
@@ -1021,6 +1040,7 @@ def subStatusChart(subselector, submissionstore, tierselector):
 def subStatusPercentageChart(subselector, submissionstore, tierselector):
     sub_df = pd.read_json(io.StringIO(submissionstore),orient='split')
     idlist = sub_df.query("name == @subselector")["_id"].tolist()
+    colors = {'new':'blue', 'error': 'red', 'warning':'yellow', 'passed':'green'}
     if len(idlist) >=1:
         qvars = {'id':idlist[0]}
         query_res = apiQuery(tierselector, dhq.submission_stats_query, qvars)
@@ -1030,19 +1050,19 @@ def subStatusPercentageChart(subselector, submissionstore, tierselector):
             substats_df.loc[len(substats_df)] = entry
         #Add percentages to df
         calccolumns = columns = ['new', 'error', 'warning', 'passed']
-        newcol = ['nodeName', 'new_percentage', 'error_percentage', 'warning_percentage', 'passed_percentage']
+        newcol = ['nodeName', 'new', 'error', 'warning', 'passed']
         per_df = pd.DataFrame(columns=newcol)
         for index, row in substats_df.iterrows():
             newrow = {}
             newrow['nodeName'] = row['nodeName']
             for column in calccolumns:
                 if row['total'] > 0:
-                    newrow[column+'_percentage'] = (row[column]/row['total'])*100
+                    newrow[column] = (row[column]/row['total'])*100
                 else:
-                    newrow[column+'_percentage'] = 0
+                    newrow[column] = 0
             per_df.loc[len(per_df)] = newrow
 
-        return px.bar(per_df, x='nodeName', y=['new_percentage', 'error_percentage', 'warning_percentage', 'passed_percentage'])
+        return px.bar(per_df, x='nodeName', y=['new', 'error', 'warning', 'passed'], color_discrete_map=colors)
     else:
         return px.bar()
 
