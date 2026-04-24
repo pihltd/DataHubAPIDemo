@@ -278,3 +278,26 @@ study_query = """
   }
 }
 """
+
+
+retrieve_released_data_query = """
+query retrieveReleasedDataByID(
+    $submissionID: String!,
+    $nodeType: String!
+    $nodeID: String!
+    ){
+    retrieveReleasedDataByID(
+        submissionID: $submissionID,
+        nodeType: $nodeType
+        nodeID: $nodeID
+    ){
+        submissionID
+        status
+        dataCommons
+        dataCommonsDisplayName
+        studyID
+        nodeType
+        nodeID
+        props
+    }
+}"""

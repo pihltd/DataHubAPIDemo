@@ -8,7 +8,6 @@ import requests
 import DH_Queries as dhq
 import os
 from datetime import datetime, timezone
-import time
 import json
 import io
 from pytz import timezone as tz
@@ -104,7 +103,6 @@ def elapsedTime(submission_df):
 def bracketParse(parsethis):
     if ']' in parsethis:
         first = parsethis.split("]")
-        print(f"Parsethis: {parsethis}\nFirst:{first}\n")
         errorstring = first[1]
         if "[" in errorstring:
             second = errorstring.split("[")
@@ -168,6 +166,36 @@ def buildBasicTable(df):
             export_format="csv"
         )
 
+
+
+def diffDataFrame(subid, nodetype, nodeID, tier, query):
+    # This is used to create a df for data update warnings
+    difflist = []
+    variables = {'submissionID': subid , 'nodeType': nodetype, 'nodeID': nodeID}
+    diffres = apiQuery(tier, query, variables)
+    dfcollection = {}
+    if 'errors' in diffres:
+        return None
+    else:
+        for entry in diffres['data']['retrieveReleasedDataByID']:
+            tempstuff = json.loads(entry['props'])
+            propstuff = {}
+            if entry['status'] == "Warning":
+                propstuff['EntryType'] = "New"
+            else:
+                propstuff['EntryType'] = 'Existing'
+            for key, value in tempstuff.items():
+                propstuff[key] = value
+            temp_df = pd.DataFrame(propstuff, index=[entry['submissionID']])
+            dfcollection[entry['submissionID']] = temp_df
+            keylist = list(dfcollection.keys())
+            if len(keylist) >= 2:
+                df1 = dfcollection[keylist[0]]
+                df2 = dfcollection[keylist[1]]
+                diff_df = pd.concat([df1, df2]).drop_duplicates(keep=False)
+                difflist.append(diff_df)
+        report_df = pd.concat(difflist)
+        return report_df
 
 
 ############################################
@@ -273,6 +301,18 @@ sidebar = html.Div(
                     multi=False,
                     style={'backgroundcolor': '1E1E1E'},
                 ),
+                # Warning Dropdown
+                html.Hr(),
+                html.H2("Warning Details"),
+                html.Hr(),
+                html.P("Select a warning type"),
+                html.Hr(),
+                dcc.Dropdown(
+                    id = 'warningselector',
+                    options = [],
+                    multi=False,
+                    style={'backgroundcolor': '1E1E1E'}
+                ),
                 # Data Dropdown
                 html.Hr(),
                 html.H2('Data Nodes'),
@@ -298,8 +338,8 @@ tableheader = html.Div([
     html.Hr(),
     html.H2("Submissions for Study: Select a tier and study from the dropdowns", id='studytabletitle'),
     html.Hr()
-],
-    style=CONTENT_STYLE)
+    ]
+)
 
 
 
@@ -308,16 +348,13 @@ errorheader = html.Div(
         html.Hr(),
         html.H2("Error and Warning Details", id='errortitle'),
         html.Hr()
-    ],
-    style=CONTENT_STYLE
+    ]
 )
 
 
-barcharts = html.Div(
-    [
-        html.Div(
-            dbc.Spinner(html.Div(id='errorspinner'), color="primary")
-        ),
+
+barcharts2 = html.Div([
+    dcc.Loading([
         html.Div(
             #Count bar chart
             className='submissionStatusPlot',
@@ -338,41 +375,37 @@ barcharts = html.Div(
             ],
             style={'width':'49%', 'display':'inline-block'},
         ),
-    ],
-    style=CONTENT_STYLE
-)
+    ])
+])
 
 
 
-errorpie = html.Div(
-    [
-    html.Div(
-        #Error Pie Chart
-        className='ValidationErrorPieChart',
-        children=[
-            html.Hr(),
-            html.H2("Validation Errors", id='validationerrorpietitle'),
-            dcc.Graph(id='validationErrorPie')
-        ],
-        style={'width':'49%', 'display':'inline-block'},
-    
-    ),
-    html.Div(
-        #Warning Pie
-        className="ValidationWarningPieChart",
-        children=[
-            html.Hr(),
-            html.H2("Validation Warnings", id='validationwarningpietitle'),
-            dcc.Graph(id='validationWarningPie')
-        ],
-        style={'width':'49%', 'display':'inline-block'},
-    ),
-    ],
-    style=CONTENT_STYLE
-)
+errorpie2 = html.Div([
+    dcc.Loading([
+        html.Div(
+            className='ValidationErrorPieChart',
+            children=[
+                html.Hr(),
+                html.H2("Validation Errors", id='validationerrorpietitle'),
+                dcc.Graph(id='validationErrorPie')
+            ],
+            style={'width':'49%', 'display': 'inline-block'},
+        ),
+        html.Div(
+            className="ValidationWarningPieChart",
+            children=[
+                html.Hr(),
+                html.H2("Validation Warnings", id='validationwarningpietitle'),
+                dcc.Graph(id='validationWarningPie')
+            ],
+            style={'width':'49%', 'display':'inline-block'},
+        )
+    ])
+])
 
-errorsummary = html.Div(
-    [
+
+errorsummary2 = html.Div([
+    dcc.Loading([
         html.Div(
             className='ErrorSummaryTable',
             children=[
@@ -391,10 +424,8 @@ errorsummary = html.Div(
             ],
             style={'width': '49%','display':'inline-block'},
         ),
-    ],
-    style={"margin-left": "18rem","margin-right": "12rem","padding": "2rem 1 rem","display": "flex"}
-)
-
+    ])
+])
 
 
 dataheader = html.Div(
@@ -402,48 +433,101 @@ dataheader = html.Div(
         html.Hr(),
         html.H2("Submitted Data", id='datatitle'),
         html.Hr()
-    ],
-    style=CONTENT_STYLE
+    ]
 )
+
+warningheader = html.Div([
+    html.Hr(),
+    html.H2("Validation Warnings", id='warningtitle'),
+    html.Hr()
+])
 
 batchheader = html.Div(
     [
         html.Hr(),
         html.H2("Batch History", id="batchtitle"),
         html.Hr()
-    ],
-    style=CONTENT_STYLE
-)
-
-batchcontent = html.Div(
-    [
-        html.Div(id="batchcontent", style=CONTENT_STYLE)
     ]
 )
 
+batchcontent2 = html.Div([
+    dcc.Loading([
+        html.Div(id="batchcontent")
+    ])
+])
+
+
 content = html.Div([
-    html.Div(id='page-content', style=CONTENT_STYLE),
+    html.Div(id='page-content'),
     dcc.Store(id='selectedsubmissionstore')
 ])
 
-updateButton = html.Button('Reset Time on Selected Submissions', id='updatethis', n_clicks=0, style=CONTENT_STYLE)
+updateButton = html.Button('Reset Time on Selected Submissions', id='updatethis', n_clicks=0)
 
-errorcontent = html.Div(
-    [
-        html.Div(dbc.Spinner(html.Div(id="errorcontentspinner"), color="primary")),
-        html.Div(id="errorcontent", style=CONTENT_STYLE)
-    ]
-)
+errorcontent2 = html.Div([
+    dcc.Loading([
+        html.Div(id="errorcontent")
+    ])
+])
+
+warningcontent = html.Div([
+    dcc.Loading([
+        html.Div(id='warningcontent')
+    ])
+])
 
 
+datacontent2 = html.Div([
+    dcc.Loading([
+        html.Div(id="datacontent")
+    ])
+])
 
-datacontent = html.Div(
-    [
-        html.Div(dbc.Spinner(html.Div(id="datacontentspinner"), color="primary")),
-        html.Div(id="datacontent", style=CONTENT_STYLE)
-    ]
-)
 
+# https://stackoverflow.com/questions/70352045/dash-keep-tabs-bar-on-top-and-remember-where-was-scrolled-between-tabs
+# The id = tabs-container points to tabs.css in the assets folder and makes the tabs sticky at the top
+sitecontent =html.Div([
+    dcc.Tabs(
+    id='tabs-container', 
+    value='tab-status',
+    children=[
+        dcc.Tab(label="Status",
+                value = 'tab-status',
+                id = 'statustab',
+                style = TAB_STYLE,
+                selected_style = SELECTED_TAB_STYLE,
+                children=[tableheader, content, updateButton, barcharts2, errorpie2, errorsummary2],
+                ),
+        dcc.Tab(label="Submission Batch History",
+                value="tab-batch",
+                id='batchtab',
+                style=TAB_STYLE,
+                selected_style=SELECTED_TAB_STYLE,
+                children=[batchheader, batchcontent2]
+                ),
+        dcc.Tab(label="Submission Errors",
+                value = 'tab-errors',
+                id = 'errortab',
+                style = TAB_STYLE,
+                selected_style = SELECTED_TAB_STYLE,
+                children=[errorheader, errorcontent2]
+                ),
+        dcc.Tab(label='Submission Warnings',
+                value = 'warning-data',
+                id = 'warningtab',
+                style=TAB_STYLE,
+                selected_style=SELECTED_TAB_STYLE,
+                children=[warningheader, warningcontent]),
+        dcc.Tab(label="Submitted Data",
+                value='tab-data',
+                id='datatab',
+                style=TAB_STYLE,
+                selected_style=SELECTED_TAB_STYLE,
+                children=[dataheader, datacontent2]
+                )
+        ]
+    )
+],style=CONTENT_STYLE)
 
 
 ####################################
@@ -452,47 +536,10 @@ datacontent = html.Div(
 #                                  #
 ####################################
 
+app.layout = html.Div([
+    sidebar, sitecontent
+])
 
-app.layout = html.Div([sidebar,
-                       dcc.Tabs(id='tabs-container', value='tab-status',
-                                children=
-                           [
-                               dcc.Tab(label="Status",
-                                       value = 'tab-status',
-                                       style = TAB_STYLE,
-                                       selected_style = SELECTED_TAB_STYLE,
-                                       children=[
-                                           tableheader, content, updateButton, barcharts, errorpie, errorsummary
-                                       ],
-                               ),
-                               dcc.Tab(
-                                   label="Submission Batch History",
-                                   value="tab-batch",
-                                   style=TAB_STYLE,
-                                   selected_style=SELECTED_TAB_STYLE,
-                                   children=[
-                                       batchheader, batchcontent
-                                   ]
-                               ),
-                               dcc.Tab(label="Submission Errors",
-                                       value = 'tab-errors',
-                                       id = 'errortab',
-                                       style = TAB_STYLE,
-                                       selected_style = SELECTED_TAB_STYLE,
-                                       children=[
-                                           errorheader, errorcontent
-                                       ]
-                               ),
-                               dcc.Tab(label="Submitted Data",
-                                       value = 'tab-data',
-                                       style = TAB_STYLE,
-                                       selected_style = SELECTED_TAB_STYLE,
-                                       children=[
-                                           dataheader, datacontent
-                                       ]),
-                           ],
-                           style=CONTENT_STYLE
-                       )])
 
 
 
@@ -543,40 +590,6 @@ def populateSelectedSubmissionStore(studyselector, submissionstore):
     sub_df = pd.read_json(io.StringIO(submissionstore),orient='split')
     table_df = sub_df.loc[sub_df['studyAbbreviation'] == studyselector]
     return table_df.reset_index().to_json(orient='split')
-
-
-###################### Spinner Callbacks ##################################
-
-
-
-@app.callback(
-    Output('datacontentspinner', 'children'),
-    Input(component_id='dataselector', component_property='value')
-)
-def loadDataSpinner(value):
-    time.sleep(5)
-    return value
-
-
-
-@app.callback(
-    Output('errorspinner', 'children'),
-    Input(component_id='subselector', component_property='value')
-)
-def loadErrorSpinner(value):
-    time.sleep(5)
-    return value
-
-
-
-@app.callback(
-    Output('errorcontentspinner', 'children'),
-    Input(component_id='errorselector', component_property='value')
-)
-def errorDetailSpinner(value):
-    time.sleep(5)
-    return value
-
 
 
 ######################## Title callbacks ####################################
@@ -645,9 +658,22 @@ def changeValidationWarningPieTitle(subselector):
 )
 def errorTableTitle(errorselector, studyselector, subselector):
     if errorselector == None:
-        return("Error and Warning Details:")
+        return("Error Details:")
     else:
-        return ("Error and Warning Details:",html.Br(),"Study: "+studyselector,html.Br(),"Submission: "+subselector, html.Br(), "Errors: "+errorselector)
+        return ("Error Details:",html.Br(),"Study: "+studyselector,html.Br(),"Submission: "+subselector, html.Br(), "Errors: "+errorselector)
+
+
+@app.callback(
+Output("warningtitle", "children"),
+Input(component_id='warningselector', component_property='value'),
+State(component_id='studyselector', component_property='value'),
+State(component_id='subselector', component_property='value')
+)
+def warningTableTitle(warningselector, studyselector, subselector):
+    if warningselector == None:
+        return("Warning Details:")
+    else:
+        return ("Warning Details:",html.Br(),"Study: "+studyselector,html.Br(),"Submission: "+subselector, html.Br(), "Warnings: "+warningselector)
 
 
 @app.callback(
@@ -656,7 +682,7 @@ def errorTableTitle(errorselector, studyselector, subselector):
     State(component_id="studyselector", component_property="value"),
     State(component_id="subselector", component_property="value")
 )
-def errorTableTitle(dataselector, studyselector, subselector):
+def dataTableTitle(dataselector, studyselector, subselector):
     if dataselector == None:
         return ("Submitted Data:")
     else:
@@ -714,7 +740,8 @@ def populateErrorSelector(subselector, submissionstore, tierselector):
     sub_df = pd.read_json(io.StringIO(submissionstore), orient='split')
     idlist = sub_df.query("name == @subselector")["_id"].tolist()
     if len(idlist)>=1:
-        queryvars = {"submissionID":idlist[0], "severity":"All", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
+        #queryvars = {"submissionID":idlist[0], "severity":"All", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
+        queryvars = {"submissionID":idlist[0], "severity":"Error", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
         selector_res = apiQuery(tierselector, dhq.summaryQuery, queryvars)
         if selector_res['data']['aggregatedSubmissionQCResults']['total'] == 0:
             return []
@@ -723,7 +750,27 @@ def populateErrorSelector(subselector, submissionstore, tierselector):
             return val_df['title'].unique()
     else:
         return []
-
+    
+#Warning Selector
+@app.callback(
+        Output('warningselector', 'options'),
+        Input(component_id='subselector', component_property='value'),
+        State(component_id='submissionstore', component_property='data'),
+        State(component_id='tierselector', component_property='value')
+)
+def populateWarningSelector(subselector, submissionstore, tierselector):
+    sub_df = pd.read_json(io.StringIO(submissionstore), orient='split')
+    idlist = sub_df.query("name ==@subselector")["_id"].tolist()
+    if len(idlist) >= 1:
+        queryvars = {"submissionID":idlist[0], "severity":"Warning", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
+        selector_res = apiQuery(tierselector, dhq.summaryQuery, queryvars)
+        if selector_res['data']['aggregatedSubmissionQCResults']['total'] == 0:
+            return []
+        else:
+            val_df = pd.DataFrame(selector_res['data']['aggregatedSubmissionQCResults']['results'])
+            return val_df['title'].unique()
+    else:
+        return []
 
 
 # Data Node selector
@@ -821,16 +868,19 @@ def populateStudyInfoTable(modified_timestamp, selectedsubmissionstore):
 def populateDataTable(dataselector, submissionstore, subselector, tierselector):
     sub_df = pd.read_json(io.StringIO(submissionstore),orient='split')
     idlist = sub_df.query("name == @subselector")['_id'].tolist()
-    queryvars = {'_id':idlist[0], 'nodeType':dataselector, 'status':'All', 'first':-1, 'offset':0, 'orderBy':'studyID', 'sortDirection':'desc'}
-    data_res = apiQuery(tierselector, dhq.submission_nodes_query, queryvars)
-    if 'data' in data_res:
-        if data_res['data']['getSubmissionNodes']['total'] == 0:
-            return dash_table.DataTable()
+    if len(idlist) >= 1:
+        queryvars = {'_id':idlist[0], 'nodeType':dataselector, 'status':'All', 'first':-1, 'offset':0, 'orderBy':'studyID', 'sortDirection':'desc'}
+        data_res = apiQuery(tierselector, dhq.submission_nodes_query, queryvars)
+        if 'data' in data_res:
+            if data_res['data']['getSubmissionNodes']['total'] == 0:
+                return dash_table.DataTable()
+            else:
+                data_df = pd.DataFrame(columns=data_res['data']['getSubmissionNodes']['properties'])
+                for entry in data_res['data']['getSubmissionNodes']['nodes']:
+                    data_df.loc[len(data_df)] = json.loads(entry['props'])
+                return buildBasicTable(data_df)
         else:
-            data_df = pd.DataFrame(columns=data_res['data']['getSubmissionNodes']['properties'])
-            for entry in data_res['data']['getSubmissionNodes']['nodes']:
-                data_df.loc[len(data_df)] = json.loads(entry['props'])
-            return buildBasicTable(data_df)
+            return dash_table.DataTable()
     else:
         return dash_table.DataTable()
 
@@ -847,12 +897,12 @@ def errorDetailTable(errorselector, submissionstore, subselector, tierselector):
     sub_df = pd.read_json(io.StringIO(submissionstore),orient='split')
     idlist = sub_df.query("name == @subselector")["_id"].tolist()
     if len(idlist)>=1:
-        subvars = {"submissionID":idlist[0], "severity":"All", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
+        subvars = {"submissionID":idlist[0], "severity":"Error", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
         sub_res = apiQuery(tierselector, dhq.summaryQuery, subvars)
         if sub_res['data']['aggregatedSubmissionQCResults']['total'] == 0:
             return dash_table.DataTable()
         else:   
-            errorvars = {"id": idlist[0], "severities":"All", "first": -1, "offset": 0, "orderBy":"displayID", "sortDirection":"desc"}
+            errorvars = {"id": idlist[0], "severities":"Error", "first": -1, "offset": 0, "orderBy":"displayID", "sortDirection":"desc"}
             detail_res = apiQuery(tierselector, dhq.detailedQCQuery, errorvars)
             columns = ['type', 'title', 'description']
             error_df = pd.DataFrame(columns=columns)
@@ -863,13 +913,50 @@ def errorDetailTable(errorselector, submissionstore, subselector, tierselector):
                         error['type'] = 'Error'
                         error_df.loc[len(error_df)] = error
                 #Do the same for warnings
-                for warning in result['warnings']:
-                    if warning['title'] == errorselector:
-                        warning['type'] = 'Warning'
-                        error_df.loc[len(error_df)] = warning
+                #for warning in result['warnings']:
+                #    if warning['title'] == errorselector:
+                #        warning['type'] = 'Warning'
+                #        error_df.loc[len(error_df)] = warning
                 return buildBasicTable(error_df)
     else:
         return dash_table.DataTable()
+
+
+@app.callback(
+        Output('warningcontent', 'children'),
+        Input(component_id='warningselector', component_property='value'),
+        State(component_id='submissionstore', component_property='data'),
+        State(component_id='subselector', component_property='value'),
+        State(component_id='tierselector', component_property='value')
+)
+def warningDetailTable(warningselector, submissionstore, subselector, tierselector):
+    sub_df = pd.read_json(io.StringIO(submissionstore), orient='split')
+    #print(sub_df)
+    idlist = sub_df.query("name == @subselector")["_id"].tolist()
+    #print(f"WarningSelector: {warningselector}\nIDList: {idlist}")
+    if len(idlist) >= 1:
+        subvars = {"submissionID":idlist[0], "severity":"Warning", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
+        sub_res = apiQuery(tierselector, dhq.summaryQuery, subvars)
+        if sub_res['data']['aggregatedSubmissionQCResults']['total'] == 0:
+            return dash_table.DataTable()
+        else:
+            errorvars = {"id": idlist[0], "severities":"Warning", "first": -1, "offset": 0, "orderBy":"displayID", "sortDirection":"desc"}
+            detail_res = apiQuery(tierselector, dhq.detailedQCQuery, errorvars)
+            # TODO: for replacement warnings need to build in special handling
+            if warningselector == 'Updating existing data':
+                print('Update')
+            else:
+                columns = ['type', 'title', 'description']
+                warning_df = pd.DataFrame(columns=columns)
+                for result in detail_res['data']['submissionQCResults']['results']:
+                    for warning in result['warnings']:
+                        if warning['title'] == warningselector:
+                            warning['type'] = 'Warning'
+                            warning_df.loc[len(warning_df)] = warning
+                        return buildBasicTable(warning_df)
+    else:
+        return dash_table.DataTable()
+        
 
 
 @app.callback(
@@ -908,7 +995,7 @@ def validationErrorSummaryTable(subselector, submissionstore, tierselector):
     sub_df = pd.read_json(io.StringIO(submissionstore),orient='split')
     idlist = sub_df.query("name == @subselector")["_id"].tolist()
     if len(idlist) >= 1:
-        subvars = {"submissionID":idlist[0], "severity":"All", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
+        subvars = {"submissionID":idlist[0], "severity":"Error", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
         sub_res = apiQuery(tierselector, dhq.summaryQuery, subvars)
         if sub_res['data']['aggregatedSubmissionQCResults']['total'] == 0:
             return dash_table.DataTable()
@@ -938,7 +1025,7 @@ def validationWarningSummaryTable(subselector, submissionstore, tierselector):
     sub_df = pd.read_json(io.StringIO(submissionstore),orient='split')
     idlist = sub_df.query("name == @subselector")["_id"].tolist()
     if len(idlist) >= 1:
-        subvars = {"submissionID":idlist[0], "severity":"All", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
+        subvars = {"submissionID":idlist[0], "severity":"Warning", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
         sub_res = apiQuery(tierselector, dhq.summaryQuery, subvars)
         if sub_res['data']['aggregatedSubmissionQCResults']['total'] == 0:
             return dash_table.DataTable()
