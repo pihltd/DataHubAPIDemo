@@ -301,3 +301,17 @@ query retrieveReleasedDataByID(
         props
     }
 }"""
+
+
+submission_summary_query = """
+query SubmissionSummary(
+  $submissionID: ID!
+  ){
+    getSubmissionSummary(submissionID: $submissionID){
+      nodeType
+      new
+      updated
+      deleted
+    }
+  }
+"""

@@ -114,17 +114,23 @@ def bracketParse(parsethis):
 
 
 def updateAggregation(df):
+    #print(f"\nStarting DF:\n{df}")
     filelist = []
     columns = ['title', 'description', 'count']
     agg_df = pd.DataFrame(columns=columns)
     for index, row in df.iterrows():
-        if row['title'] == 'Updating existing data':
-            if "file_id" in row['description']:
-                filelist.append(row['description'])
+        #print(f"\nRow:\n{row}")
+        #if row['title'] == 'Updating existing data':
+        if 'Updating' in row['title']:
+            #if "file_id" in row['description']:
+            filelist.append(row['description'])
         else:
             agg_df.loc[len(agg_df)] = row
+    #print(f"\nFinal aggregation:\n{agg_df}\n")
+    #print(f"File list: {filelist}")
     if len(filelist) > 0:
         agg_df.loc[len(agg_df)] = {'title': 'Updating existing data', 'description': 'File update', 'count': len(filelist)}
+    #print(f"\nReturned dataframe:\n{agg_df}")
     return agg_df
 
 
@@ -146,7 +152,13 @@ def updateSubmissionClock(subid, tier):
     return updatejson
 
 
-def buildBasicTable(df):
+def buildBasicTable(df, diffstyle = None):
+    if diffstyle is None:
+        styles = [{'if':{'row_index':'odd'}, 'backgroundColor': 'rgb(220,220,220)'}]
+    else:
+        styles = diffstyle
+
+    print(f"Using styles: {styles}")
 
     return dash_table.DataTable(
             data=df.to_dict('records'),
@@ -154,7 +166,7 @@ def buildBasicTable(df):
             style_table={'overflowX':'auto'},
             style_cell={'overflow':'hidden', 'textOverflow':'ellipsis', 'maxWidth':10, 'textAlign':'center'},
             style_data={'color':'black', 'backgroundColor':'white'},
-            style_data_conditional=[{'if':{'row_index':'odd'}, 'backgroundColor': 'rgb(220,220,220)'}],
+            style_data_conditional=styles,
             style_header={'backgroundColor': 'rgb(210,210,210)', 'color':'black', 'fontWeight':'bold', 'textAlign':'center'},
             tooltip_data=[
                 {
@@ -165,6 +177,26 @@ def buildBasicTable(df):
             tooltip_duration=None,
             export_format="csv"
         )
+
+
+def warningStyle(df):
+    styles = [{'if':{'row_index':'odd'}, 'backgroundColor': 'rgb(220,220,220)'}]
+    for i in range(1, len(df), 2):
+        curr_row = df.iloc[i]
+        prev_row = df.iloc[i-1]
+        for col in df.columns:
+            if col != 'EntryType':
+                #print(f"Comparing column {col}")
+                if curr_row[col] != prev_row[col]:
+                    #print(f"Current: {curr_row[col]} DOES NOT match Prev: {prev_row[col]}")
+                    styles.append({
+                        'if': {'row_index': i, 'column_id': f"{col}"}, 'backgroundColor': '#3498DB', 'color':'black' 
+                    })
+                #else:
+                #    print(f"Current: {curr_row[col]} MATCHES Prev: {prev_row[col]}")
+    #print(f"Sending: {styles}")
+    #styles = None
+    return styles
 
 
 
@@ -197,6 +229,39 @@ def diffDataFrame(subid, nodetype, nodeID, tier, query):
         report_df = pd.concat(difflist)
         return report_df
 
+
+
+def buildUpdateDataframe(subid, tier):
+    final_report_df = pd.DataFrame()
+    #Get a list of the nodes in the submission
+    subvars = {"submissionID": subid}
+    sub_summary_res = apiQuery(tier=tier, query=dhq.submission_summary_query, variables=subvars)
+    #print(f"Sub Summary Query results:\n{sub_summary_res}\n")
+    nodelist = []
+    if 'getSubmissionSummary' in sub_summary_res['data']:
+        #print("Valid getSubmissionSummary")
+        for entry in sub_summary_res['data']['getSubmissionSummary']:
+            nodelist.append(entry['nodeType'])
+        # Now get the node ID for each of the nodes:
+        node_data = {}
+        #print(f"Nodelist:\n{nodelist}\n")
+        for node in nodelist:
+            vars = {"_id":subid, "nodeType":node, "status":"Warning", "first":-1, "offset":0, "orderBy":"nodes", "sortDirection":"Desc"}
+            node_res = apiQuery(tier=tier, query=dhq.submission_nodes_query, variables=vars)
+            #print(f"Vars: {vars}\nNode results:\n{node_res}\n")
+            if 'nodes' in node_res['data']['getSubmissionNodes']:
+                for entry in node_res['data']['getSubmissionNodes']['nodes']:
+                    node_data[node] = entry['nodeID']
+            else:
+                return None
+            for node, nodeID in node_data.items():
+                report_df = diffDataFrame(subid=subid, nodetype=node, nodeID=nodeID, tier=tier, query=dhq.retrieve_released_data_query)
+                #print(f"Report dataframe:\n{report_df}\n")
+                final_report_df = pd.concat([final_report_df, report_df]).drop_duplicates(keep=False)
+        #print(f"Final report df:\n{final_report_df}\n")
+        return final_report_df
+    else:
+        return None
 
 ############################################
 #                                          #
@@ -831,6 +896,7 @@ def updateInactiveTime(n_clicks, tierselector, selectedsubmissionstore, selected
 def populateStudyInfoTable(modified_timestamp, selectedsubmissionstore):
     sub_df = pd.read_json(io.StringIO(selectedsubmissionstore),orient='split')
     data=sub_df.to_dict('records')
+    #colors = {'new':'#3498DB' , 'error': '#E74C3C', 'warning': '#F4D03F', 'passed': '#16A085'}
     columns=[{"name":e, "id":e} for e in (sub_df.columns)]
     return dash_table.DataTable(id='selectedstudytable',
                                 data=data, 
@@ -839,9 +905,9 @@ def populateStudyInfoTable(modified_timestamp, selectedsubmissionstore):
                                 style_cell={'overflow':'hidden', 'textOverflow':'ellipsis', 'maxWidth':10, 'textAlign':'center'},
                                 style_data={'color':'black', 'backgroundColor':'white'},
                                 style_data_conditional=[{'if':{'row_index':'odd'}, 'backgroundColor': 'rgb(220,220,220)'},
-                                                        {'if':{'filter_query':'{inactiveDays} <= 45', 'column_id':'inactiveDays'}, 'backgroundColor':'green', 'color':'white'},
-                                                        {'if':{'filter_query':'{inactiveDays} >= 46 && {inactiveDays} <=59', 'column_id':'inactiveDays'}, 'backgroundColor':'yellow', 'color':'black'},
-                                                        {'if':{'filter_query':'{inactiveDays} >= 60', 'column_id':'inactiveDays'}, 'backgroundColor':'red', 'color':'white'}],
+                                                        {'if':{'filter_query':'{inactiveDays} <= 45', 'column_id':'inactiveDays'}, 'backgroundColor':'#16A085', 'color':'black'},
+                                                        {'if':{'filter_query':'{inactiveDays} >= 46 && {inactiveDays} <=59', 'column_id':'inactiveDays'}, 'backgroundColor':'#F4D03F', 'color':'black'},
+                                                        {'if':{'filter_query':'{inactiveDays} >= 60', 'column_id':'inactiveDays'}, 'backgroundColor':'#E74C3C', 'color':'black'}],
                                 style_header={'backgroundColor': 'rgb(210,210,210)', 'color':'black', 'fontWeight':'bold', 'textAlign':'center'},
                                 row_selectable="multi",
                                 sort_action='native',
@@ -933,21 +999,32 @@ def warningDetailTable(warningselector, submissionstore, subselector, tierselect
     sub_df = pd.read_json(io.StringIO(submissionstore), orient='split')
     #print(sub_df)
     idlist = sub_df.query("name == @subselector")["_id"].tolist()
-    #print(f"WarningSelector: {warningselector}\nIDList: {idlist}")
+    #print(f"WarningSelector: {warningselector}\nIDList: {idlist}\n")
     if len(idlist) >= 1:
         subvars = {"submissionID":idlist[0], "severity":"Warning", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
         sub_res = apiQuery(tierselector, dhq.summaryQuery, subvars)
+        #print(f"Sub results:\n{sub_res}\n")
         if sub_res['data']['aggregatedSubmissionQCResults']['total'] == 0:
             return dash_table.DataTable()
         else:
             errorvars = {"id": idlist[0], "severities":"Warning", "first": -1, "offset": 0, "orderBy":"displayID", "sortDirection":"desc"}
             detail_res = apiQuery(tierselector, dhq.detailedQCQuery, errorvars)
+            #print(f"Detailed results:\n{detail_res}\n")
             # TODO: for replacement warnings need to build in special handling
             if warningselector == 'Updating existing data':
-                print('Update')
+                #print("calling buildUpdateDataFrame")
+                update_df = buildUpdateDataframe(subid=idlist[0], tier=tierselector)
+                #print(f"Updating DF: \n{update_df}\n")
+                if update_df is not None:
+                    styles = warningStyle(update_df)
+                    print(f"Sending style: {styles}")
+                    return buildBasicTable(update_df, styles)
+                else:
+                    return dash_table.DataTable()
             else:
                 columns = ['type', 'title', 'description']
                 warning_df = pd.DataFrame(columns=columns)
+                #print(f"Other warnings:\n{warning_df}\n")
                 for result in detail_res['data']['submissionQCResults']['results']:
                     for warning in result['warnings']:
                         if warning['title'] == warningselector:
@@ -1027,6 +1104,7 @@ def validationWarningSummaryTable(subselector, submissionstore, tierselector):
     if len(idlist) >= 1:
         subvars = {"submissionID":idlist[0], "severity":"Warning", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
         sub_res = apiQuery(tierselector, dhq.summaryQuery, subvars)
+        #print(f"Warning query results:\n{sub_res}")
         if sub_res['data']['aggregatedSubmissionQCResults']['total'] == 0:
             return dash_table.DataTable()
         else:
@@ -1034,13 +1112,17 @@ def validationWarningSummaryTable(subselector, submissionstore, tierselector):
             error_df = pd.DataFrame(columns=columns)
             errorvars = {"id": idlist[0], "severities":"Warning", "first": -1, "offset": 0, "orderBy":"displayID", "sortDirection":"desc"}
             detail_res = apiQuery(tierselector, dhq.detailedQCQuery, errorvars)
+            #print(f"Warnign detail:\n{detail_res}")
             for result in detail_res['data']['submissionQCResults']['results']:
                 for error in result['warnings']:
                     message = bracketParse(error['description'])
                     error_df.loc[len(error_df)] = {'type':'Error', 'title':error['title'], 'description':message}
+                #print(f"Error dataframe:\n{error_df}")
             temp_df = error_df.groupby(['title', 'description']).size().reset_index().rename(columns={0:'count'}).sort_values(by='count', ascending=False)
+            #print(f"Temp dataframe:\n{temp_df}")
             summary_df = updateAggregation(temp_df)
             summary_df = summary_df.sort_values(by='count', ascending=False)
+            #print(f"Summary dataframe:\n{summary_df}")
             return buildBasicTable(summary_df)
     else:
         return dash_table.DataTable()
@@ -1104,7 +1186,9 @@ def validationWarningPieChart(subselector, submissionstore, tierselector):
 def subStatusChart(subselector, submissionstore, tierselector):
     sub_df = pd.read_json(io.StringIO(submissionstore),orient='split')
     idlist = sub_df.query("name == @subselector")["_id"].tolist()
-    colors = {'new':'blue', 'error': 'red', 'warning':'yellow', 'passed':'green'}
+    #colors = {'new':'blue', 'error': 'red', 'warning':'yellow', 'passed':'green'}
+    #colors = {'new':'#74D4FF' , 'error': '#FFA2A2', 'warning': '#FFF085', 'passed': '#7BF1A8'}
+    colors = {'new':'#3498DB' , 'error': '#E74C3C', 'warning': '#F4D03F', 'passed': '#16A085'}
     if len(idlist) >= 1:
         qvars = {'id': idlist[0]}
         query_res = apiQuery(tierselector, dhq.submission_stats_query, qvars)
@@ -1127,7 +1211,9 @@ def subStatusChart(subselector, submissionstore, tierselector):
 def subStatusPercentageChart(subselector, submissionstore, tierselector):
     sub_df = pd.read_json(io.StringIO(submissionstore),orient='split')
     idlist = sub_df.query("name == @subselector")["_id"].tolist()
-    colors = {'new':'blue', 'error': 'red', 'warning':'yellow', 'passed':'green'}
+    #colors = {'new':'blue', 'error': 'red', 'warning':'yellow', 'passed':'green'}
+    #colors = {'new':'#74D4FF' , 'error': '#FFA2A2', 'warning': '#FFF085', 'passed': '#7BF1A8'}
+    colors = {'new':'#3498DB' , 'error': '#E74C3C', 'warning': '#F4D03F', 'passed': '#16A085'}
     if len(idlist) >=1:
         qvars = {'id':idlist[0]}
         query_res = apiQuery(tierselector, dhq.submission_stats_query, qvars)
