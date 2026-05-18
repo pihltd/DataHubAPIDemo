@@ -23,6 +23,7 @@ This notebook covers several queries that can provide more detailed information 
 - Retrieving a populated configuration file for use in uploading data files with the CLI Upload Tool
 
 ## SubmissionReportDashboard.py
+**Removed**  Now in it's own repo:  https://github.com/pihltd/DataHubSubmissionDashboard.git
 This is a Python Dash application that uses the APIs to create a personal dashboard of your submissions.  To use this script, run the script (# python3 SubmissionReportDashboard.py), then launch a browser and navigate to http://localhost:8050.
 
 **Required Python Libraries**
@@ -30,6 +31,7 @@ dash, dash_bootstrap_components, plotly, requests, pandas, datetime, pytz
 
 
 ## ShinyDashboard.py
+**Removed** Too much trouble when Dash is working.
 Simialr to the SubmissionReportDashboard only uses Python Shiny instead of Dash.
 
 
@@ -70,7 +72,7 @@ dash, dash_bootstrap_components, requests, pandas, datetime, pytz
 When updating a submission that has previously been through DataHub, it's possible to get a great number of warnings that data is going to be changed.  Unfortunately, the current Submission Portal interface doesn't have a way to aggregate and display these warnings which can make it difficult and tedious to check.  This script and notebook will aggregate all the warnings in a submission and display alternating old and new lines in a table(notebook) or output a csv file (script).  
 
 ## DeleTron.py
-This script addresses a weakness in the Submission Portal, namely that deleting some, but not all, entries in a node can become tedious.  The graphical interface nicely supports deleting individual entries as well as entire nodes.  However, the graphical interface does not support deleting dozens or hundreds of entries if needed.
+This script addresses a weakness in the Submission Portal, namely that deleting some, but not all, entries in a node can become tedious.  The Submission Portal graphical interface nicely supports deleting individual entries as well as entire nodes.  However, the Submisison Portal graphical interface does not support deleting dozens or hundreds of entries if needed.
 
 DeleTron.py will take a Data Hub csv loading sheet and instead of adding the information to the submission, it will **delete** all the entries from the submission.  This allows a submitter to start with one of their existing loading sheets, edit it down (or copy to a new load sheet) the entires they wish deleted.  Like submission, deletion works on a node-by-node basis and a separate deletion sheet has to be provided for each node to be deleted.
 
